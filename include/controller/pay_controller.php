@@ -12,12 +12,16 @@ class Pay_Controller {
         $out_trade_no = Input::getStrVar('out_trade_no');
         if(empty($out_trade_no)) emMsg('非法请求');
 
+        $orderModel = new Order_Model();
         $db = Database::getInstance();
         $db_prefix = DB_PREFIX;
 
-        $sql = "select * from {$db_prefix}order where out_trade_no = '{$out_trade_no}' limit 1";
+        $sql = "select * from {$db_prefix}order where out_trade_no = '{$out_trade_no}' and delete_time is null limit 1";
         $order = $db->once_fetch_array($sql);
         if(empty($order)) emMsg('非法请求');
+        if (isset($order['status']) && (int)$order['status'] === -2) {
+            emMsg('订单已取消，无法继续支付', EM_URL . 'user/order.php');
+        }
 
         $sql = "select * from {$db_prefix}order_list where order_id={$order['id']}";
         $child_order = $db->fetch_all($sql);
@@ -28,7 +32,6 @@ class Pay_Controller {
         }
 
         if($order['amount'] == 0){
-            $orderModel = new Order_Model();
             $order_info = $orderModel->getOrderInfo($out_trade_no);
             $order_update = [
                 'pay_status' => 1,
@@ -243,6 +246,16 @@ class Pay_Controller {
 
         $orderModel = new Order_Model();
         $order_info = $orderModel->getOrderInfo($out_trade_no);
+        if (empty($order_info)) {
+            $url = ISLOGIN ? EM_URL . 'user/order.php' : EM_URL . 'user/visitors.php';
+            die(json_encode([
+                'code' => 200, 'msg' => 'Expired', 'data' => [
+                    'is_pay' => false,
+                    'is_expired' => true,
+                    'url' => $url
+                ]
+            ]));
+        }
         if($order_info['pay_time']){
             $db = Database::getInstance();
             $sql = "SELECT * FROM `" . DB_PREFIX . "order_list` WHERE `order_id` = {$order_info['id']} LIMIT 1";

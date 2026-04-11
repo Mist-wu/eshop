@@ -35,6 +35,10 @@ $goodsTitle = $viewGoods['title'] ?? '未知商品';
 $goodsCover = $viewGoods['cover'] ?? '';
 $goodsId = $viewGoods['id'] ?? ($viewChild['goods_id'] ?? 0);
 $goodsUrl = $goodsId ? Url::goods($goodsId) : '#';
+$orderNo = $viewOrder['out_trade_no'] ?? '';
+$canManageUnpaid = !empty($orderNo) && empty($viewOrder['pay_time']) && $orderStatus === 0;
+$repayUrl = $canManageUnpaid ? EM_URL . '?action=pay&out_trade_no=' . rawurlencode($orderNo) : '';
+$cancelUrl = $canManageUnpaid ? EM_URL . 'user/order.php?action=cancel&out_trade_no=' . rawurlencode($orderNo) : '';
 
 $attachText = '';
 if (!empty($viewChild['attach_user'])) {
@@ -523,6 +527,10 @@ if ($orderStatus === 1) {
 
         <div class="detail-actions">
             <a class="detail-link" href="/user/order.php"><i class="fa fa-arrow-left"></i> 返回订单列表</a>
+            <?php if (!empty($repayUrl)): ?>
+                <a class="detail-link primary" href="<?= htmlspecialchars($repayUrl) ?>"><i class="fa fa-qrcode"></i> 再次进入支付页</a>
+                <a class="detail-link" href="<?= htmlspecialchars($cancelUrl) ?>" onclick="return confirm('确认取消当前订单吗？');"><i class="fa fa-times-circle"></i> 取消订单</a>
+            <?php endif; ?>
             <?php if ($goodsUrl !== '#'): ?>
                 <a class="detail-link primary" href="<?= htmlspecialchars($goodsUrl) ?>" target="_blank"><i class="fa fa-refresh"></i> 再次购买</a>
             <?php endif; ?>

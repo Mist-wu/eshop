@@ -50,11 +50,18 @@ if (empty($action)) {
 if($action == 'visitors_order'){
 
     $order_id = Input::getIntVar('order_id');
+    $include_deleted = Input::getIntVar('include_deleted', 0);
     if(empty($order_id)){
         emMsg('订单ID不能为空');
     }
 
-    $order = $orderModel->getOrderInfoId($order_id);
+    if ($include_deleted) {
+        $db = Database::getInstance();
+        $prefix = DB_PREFIX;
+        $order = $db->once_fetch_array("SELECT * FROM {$prefix}order WHERE id = {$order_id} LIMIT 1");
+    } else {
+        $order = $orderModel->getOrderInfoId($order_id);
+    }
     if(empty($order)){
         emMsg('订单不存在');
     }
@@ -86,6 +93,7 @@ if($action == 'visitors_order'){
         $order_list[$key]['status_text'] = $order['status_text'];
         $order_list[$key]['amount'] = $order['amount'];
         $order_list[$key]['payment'] = $order['payment'] ?? '';
+        $order_list[$key]['detail_url'] = EM_URL . 'user/visitors.php?action=visitors_order&order_id=' . (int)$order['id'] . (!empty($order['delete_time']) ? '&include_deleted=1' : '');
 
         $_text = empty($row['attach_user']) ? [] : json_decode($row['attach_user'], true);
         $order_list[$key]['attach_user_text'] = '';
@@ -161,11 +169,11 @@ if($action == 'visitors_search_order'){
         Ret::error('请输入订单编号');
     }
 
-    // 直接根据订单号查询
-    $order = $orderModel->getOrderByOrderNo($order_no);
+    // 根据站内订单号或支付单号查询，精确查询时允许命中已自动取消的订单
+    $order = $orderModel->getOrderByOrderNo($order_no, true);
 
     if(empty($order)){
-        Ret::error('未找到匹配的订单，请检查订单编号是否正确');
+        Ret::error('未找到匹配的订单，请检查站内订单号或支付订单号是否正确');
     }
 
     // 获取订单详细信息
@@ -179,6 +187,7 @@ if($action == 'visitors_search_order'){
         $goods = $db->once_fetch_array($goods_sql);
 
         $order_item = [
+            'id' => (int)$order['id'],
             'out_trade_no' => $order['out_trade_no'],
             'up_no' => $order['up_no'] ?? '',
             'status' => $order['status'],
@@ -196,6 +205,7 @@ if($action == 'visitors_search_order'){
             'unit_price' => $row['unit_price'] / 100,
             'goods_url' => Url::goods($row['goods_id']),
             'url' => Url::goods($row['goods_id']),
+            'detail_url' => EM_URL . 'user/visitors.php?action=visitors_order&order_id=' . (int)$order['id'] . (!empty($order['delete_time']) ? '&include_deleted=1' : ''),
         ];
 
         // 处理规格信息
@@ -272,6 +282,51 @@ if($action == 'get_local_orders'){
         'pageSize' => 10,
         'hasMore' => ($page * 10) < $total
     ]);
+}
+
+if($action == 'cancel'){
+    $out_trade_no = Input::postStrVar('out_trade_no');
+    if (empty($out_trade_no)) {
+        Ret::error('订单号不能为空');
+    }
+
+    $order = $orderModel->getOrderByOrderNo($out_trade_no);
+    if (empty($order)) {
+        Ret::error('订单不存在或已失效');
+    }
+
+    $authorized = false;
+    $local = isset($_COOKIE['EM_LOCAL']) ? trim((string)$_COOKIE['EM_LOCAL']) : '';
+    if ($local !== '' && !empty($order['em_local']) && hash_equals((string)$order['em_local'], $local)) {
+        $authorized = true;
+    }
+
+    if (!$authorized) {
+        $contact = Input::postStrVar('contact');
+        $password = Input::postStrVar('password');
+        if ($contact !== '' || $password !== '') {
+            $matched = $orderModel->getOrderByVisitorInfo($out_trade_no, $contact, $password);
+            if (!empty($matched)) {
+                $authorized = true;
+            }
+        }
+    }
+
+    if (!$authorized) {
+        Ret::error('无权取消该订单');
+    }
+
+    if (!empty($order['pay_time']) || (int)($order['status'] ?? 0) !== 0) {
+        Ret::error('当前订单无法取消');
+    }
+
+    $db = Database::getInstance();
+    $db_prefix = DB_PREFIX;
+    $timestamp = time();
+    $db->query("UPDATE {$db_prefix}order SET status = -2, delete_time = {$timestamp}, update_time = {$timestamp} WHERE id = {$order['id']}");
+    $db->query("UPDATE {$db_prefix}order_list SET status = -2 WHERE order_id = {$order['id']}");
+
+    Ret::success('订单已取消');
 }
 
 

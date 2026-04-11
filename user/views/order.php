@@ -402,6 +402,9 @@
                                 <span class="order-total-value">￥<?= $val['amount'] ?></span>
                             </div>
                             <div class="order-actions">
+                                <?php if($val['status'] == 0): ?>
+                                    <a href="order.php?action=cancel&out_trade_no=<?= urlencode($val['out_trade_no']) ?>" class="action-btn danger" onclick="return confirm('确认取消当前订单吗？');">取消订单</a>
+                                <?php endif; ?>
                                 <a href="order.php?action=detail&out_trade_no=<?= $val['out_trade_no'] ?>" class="action-btn">订单详情</a>
                                 <?php if($val['status'] == 0): ?>
 <!--                                    <a href="../pay.php?out_trade_no=--><?php //= $val['out_trade_no'] ?><!--" class="action-btn primary">立即支付</a>-->

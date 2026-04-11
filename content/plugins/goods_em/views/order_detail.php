@@ -10,6 +10,11 @@ $secrets = emGetOrderSecrets($child_order['id']);
 
 // 获取对接信息
 $emGoods = $db->once_fetch_array("SELECT * FROM " . DB_PREFIX . "em_goods WHERE goods_id = " . (int)$goods['id']);
+$orderNo = $order['out_trade_no'] ?? '';
+$orderStatus = (int)($order['status'] ?? $child_order['status'] ?? 0);
+$canManageUnpaid = !empty($orderNo) && empty($order['pay_time']) && $orderStatus === 0;
+$repayUrl = $canManageUnpaid ? EM_URL . '?action=pay&out_trade_no=' . rawurlencode($orderNo) : '';
+$cancelUrl = $canManageUnpaid ? EM_URL . 'user/order.php?action=cancel&out_trade_no=' . rawurlencode($orderNo) : '';
 ?>
 <div class="order-detail-container" style="padding: 20px;">
     <div class="order-header" style="margin-bottom: 20px;">
@@ -34,6 +39,9 @@ $emGoods = $db->once_fetch_array("SELECT * FROM " . DB_PREFIX . "em_goods WHERE 
                             break;
                         case 1:
                             echo '<span style="color: orange;">待发货</span>';
+                            break;
+                        case -2:
+                            echo '<span style="color: #cf1322;">已取消</span>';
                             break;
                         default:
                             echo '<span style="color: gray;">未支付</span>';
@@ -84,9 +92,17 @@ $emGoods = $db->once_fetch_array("SELECT * FROM " . DB_PREFIX . "em_goods WHERE 
     <?php endif; ?>
 
     <div class="order-actions" style="text-align: center; margin-top: 20px;">
-        <a href="?action=order" style="padding: 10px 20px; background: #1890ff; color: white; text-decoration: none; border-radius: 5px;">
+        <a href="/user/order.php" style="padding: 10px 20px; background: #1890ff; color: white; text-decoration: none; border-radius: 5px;">
             返回订单列表
         </a>
+        <?php if (!empty($repayUrl)): ?>
+        <a href="<?php echo htmlspecialchars($repayUrl); ?>" style="padding: 10px 20px; background: #1677ff; color: white; text-decoration: none; border-radius: 5px; margin-left: 10px;">
+            再次进入支付页
+        </a>
+        <a href="<?php echo htmlspecialchars($cancelUrl); ?>" onclick="return confirm('确认取消当前订单吗？');" style="padding: 10px 20px; background: #fff2f0; color: #cf1322; text-decoration: none; border: 1px solid rgba(207, 19, 34, 0.25); border-radius: 5px; margin-left: 10px;">
+            取消订单
+        </a>
+        <?php endif; ?>
         <a href="<?php echo $child_order['url'] ?? 'index.php'; ?>" target="_blank"
            style="padding: 10px 20px; background: #52c41a; color: white; text-decoration: none; border-radius: 5px; margin-left: 10px;">
             再次购买

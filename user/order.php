@@ -104,10 +104,16 @@ if($action == 'download'){
 
 // 订单详情页
 if($action == 'detail'){
+    loginAuth::checkLogin(NULL, 'user');
+
     $db = Database::getInstance();
     $db_prefix = DB_PREFIX;
     $out_trade_no = Input::getStrVar('out_trade_no');
-    $order = $db->once_fetch_array("select * from {$db_prefix}order where out_trade_no = '{$out_trade_no}'");
+    $out_trade_no_sql = $db->escape_string($out_trade_no);
+    $order = $db->once_fetch_array("select * from {$db_prefix}order where out_trade_no = '{$out_trade_no_sql}' and user_id = " . UID . " and delete_time is null");
+    if (empty($order)) {
+        emMsg('订单不存在或无权查看', EM_URL . 'user/order.php');
+    }
     $child_order = $db->once_fetch_array("select * from {$db_prefix}order_list where order_id = {$order['id']}");
     $goods = $db->once_fetch_array("select * from {$db_prefix}goods where id = {$child_order['goods_id']}");
     $func = "orderDetail" . ucfirst($goods['type']);
@@ -116,6 +122,34 @@ if($action == 'detail'){
     $func($order, $child_order, $goods);
     include View::getUserView('_footer');
     View::output();
+}
+
+if ($action == 'cancel') {
+    loginAuth::checkLogin(NULL, 'user');
+
+    $db = Database::getInstance();
+    $db_prefix = DB_PREFIX;
+    $out_trade_no = Input::getStrVar('out_trade_no');
+
+    if (empty($out_trade_no)) {
+        emMsg('订单号不能为空', EM_URL . 'user/order.php');
+    }
+
+    $out_trade_no_sql = $db->escape_string($out_trade_no);
+    $order = $db->once_fetch_array("select * from {$db_prefix}order where out_trade_no = '{$out_trade_no_sql}' and user_id = " . UID . " and delete_time is null limit 1");
+    if (empty($order)) {
+        emMsg('订单不存在或无权操作', EM_URL . 'user/order.php');
+    }
+
+    if (!empty($order['pay_time']) || (int)($order['status'] ?? 0) !== 0) {
+        emMsg('当前订单无法取消', EM_URL . 'user/order.php?action=detail&out_trade_no=' . rawurlencode($out_trade_no));
+    }
+
+    $timestamp = time();
+    $db->query("UPDATE {$db_prefix}order SET status = -2, delete_time = {$timestamp}, update_time = {$timestamp} WHERE id = {$order['id']}");
+    $db->query("UPDATE {$db_prefix}order_list SET status = -2 WHERE order_id = {$order['id']}");
+
+    emMsg('订单已取消', EM_URL . 'user/order.php');
 }
 
 

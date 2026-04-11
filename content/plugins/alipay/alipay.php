@@ -133,7 +133,7 @@ function pay_alipay($order_info, $order_list){
     $biz_content = [
         'subject' => $order_info['out_trade_no'], //商品名称
         'out_trade_no' => $order_info['out_trade_no'], //商户订单号
-        'timeout_express' => '10m', //关闭订单时间
+        'timeout_express' => '5m', //关闭订单时间
         'total_amount' => round($order_info['amount'] / 100, 2), //订单金额，单位/元
         'time_expire' => date('Y-m-d H:i:s', $order_info['expire_time'])
     ];

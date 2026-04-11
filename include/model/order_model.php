@@ -9,6 +9,7 @@ class Order_Model {
     private $Parsedown;
     private $table;
     private $db_prefix;
+    private static $expiredUnpaidCleaned = false;
 
     public function __construct() {
         $this->db = Database::getInstance();
@@ -16,6 +17,47 @@ class Order_Model {
         $this->db_prefix = DB_PREFIX;
         $this->Parsedown = new Parsedown();
         $this->Parsedown->setBreaksEnabled(true); //automatic line wrapping
+        $this->cleanupExpiredUnpaidOrders();
+    }
+
+    /**
+     * 自动清理超时未支付订单
+     */
+    public function cleanupExpiredUnpaidOrders($force = false) {
+        if (self::$expiredUnpaidCleaned && !$force) {
+            return 0;
+        }
+        self::$expiredUnpaidCleaned = true;
+
+        $timestamp = time();
+        $rows = $this->db->fetch_all(
+            "SELECT id FROM {$this->table}
+             WHERE delete_time IS NULL
+             AND status = 0
+             AND (pay_time IS NULL OR pay_time = 0 OR pay_time = '')
+             AND expire_time IS NOT NULL
+             AND expire_time > 0
+             AND expire_time <= {$timestamp}"
+        );
+
+        if (empty($rows)) {
+            return 0;
+        }
+
+        $orderIds = [];
+        foreach ($rows as $row) {
+            $orderIds[] = (int)$row['id'];
+        }
+        $orderIds = array_filter($orderIds);
+        if (empty($orderIds)) {
+            return 0;
+        }
+
+        $idsStr = implode(',', $orderIds);
+        $this->db->query("UPDATE {$this->table} SET status = -2, delete_time = {$timestamp}, update_time = {$timestamp} WHERE id IN ({$idsStr})");
+        $this->db->query("UPDATE {$this->db_prefix}order_list SET status = -2 WHERE order_id IN ({$idsStr})");
+
+        return count($orderIds);
     }
     
     /**
@@ -159,7 +201,7 @@ class Order_Model {
                 'payment' => $payment_title,
                 'pay_name' => $payment_title,
                 'pay_plugin' => $payment_plugin,
-                'expire_time' => TIMESTAMP + 600,
+                'expire_time' => TIMESTAMP + 300,
                 'create_time' => TIMESTAMP,
                 'contact' => $visitor_input['contact'] ?? '',
                 'pwd' => $visitor_input['password'] ?? ''
@@ -263,9 +305,13 @@ class Order_Model {
      * 通过订单号获取主订单信息
      */
     public function getOrderInfo($out_trade_no) {
-        $sql = "SELECT * FROM $this->table WHERE out_trade_no='{$out_trade_no}'";
+        $out_trade_no = $this->db->escape_string($out_trade_no);
+        $sql = "SELECT * FROM $this->table WHERE out_trade_no='{$out_trade_no}' AND delete_time IS NULL";
         $res = $this->db->query($sql);
         $row = $this->db->fetch_array($res);
+        if (empty($row)) {
+            return [];
+        }
         $row['amount'] /= 100;
         return $row;
     }
@@ -274,7 +320,8 @@ class Order_Model {
      * 通过ID获取主订单信息
      */
     public function getOrderInfoId($id) {
-        $sql = "SELECT * FROM $this->table WHERE id={$id}";
+        $id = (int)$id;
+        $sql = "SELECT * FROM $this->table WHERE id={$id} AND delete_time IS NULL";
         $res = $this->db->query($sql);
         $row = $this->db->fetch_array($res);
         return $row;
@@ -751,14 +798,14 @@ sql;
     /**
      * 根据订单号查询订单
      */
-    public function getOrderByOrderNo($order_no) {
+    public function getOrderByOrderNo($order_no, $includeDeleted = false) {
         $order_no = $this->db->escape_string($order_no);
-        $sql = "SELECT * FROM {$this->table} WHERE out_trade_no = '{$order_no}' AND delete_time IS NULL LIMIT 1";
-        $order = $this->db->once_fetch_array($sql);
-
-        if (!empty($order)) {
-            $order['amount'] /= 100;
+        $where = "(out_trade_no = '{$order_no}' OR up_no = '{$order_no}')";
+        if (!$includeDeleted) {
+            $where .= " AND delete_time IS NULL";
         }
+        $sql = "SELECT * FROM {$this->table} WHERE {$where} LIMIT 1";
+        $order = $this->db->once_fetch_array($sql);
 
         return $order;
     }
@@ -766,12 +813,12 @@ sql;
     /**
      * 根据订单号和游客信息查询订单
      */
-    public function getOrderByVisitorInfo($order_no, $contact = '', $password = '') {
+    public function getOrderByVisitorInfo($order_no, $contact = '', $password = '', $includeDeleted = false) {
         $order_no = $this->db->escape_string($order_no);
         $contact = $this->db->escape_string($contact);
         $password = $this->db->escape_string($password);
 
-        $conditions = ["out_trade_no = '{$order_no}'"];
+        $conditions = ["(out_trade_no = '{$order_no}' OR up_no = '{$order_no}')"];
 
         if (!empty($contact)) {
             $conditions[] = "contact = '{$contact}'";
@@ -781,14 +828,14 @@ sql;
             $conditions[] = "pwd = '{$password}'";
         }
 
+        if (!$includeDeleted) {
+            $conditions[] = "delete_time IS NULL";
+        }
+
         $where = implode(' AND ', $conditions);
-        $sql = "SELECT * FROM {$this->table} WHERE {$where} AND delete_time IS NULL LIMIT 1";
+        $sql = "SELECT * FROM {$this->table} WHERE {$where} LIMIT 1";
 
         $order = $this->db->once_fetch_array($sql);
-
-        if (!empty($order)) {
-            $order['amount'] /= 100;
-        }
 
         return $order;
     }

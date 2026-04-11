@@ -23,6 +23,13 @@ if (empty($order_info)) {
     emMsg('订单不存在或已失效');
 }
 
+$detailUrl = ISLOGIN
+    ? EM_URL . 'user/order.php?action=detail&out_trade_no=' . rawurlencode($order_info['out_trade_no'])
+    : EM_URL . 'user/visitors.php';
+$cancelUrl = ISLOGIN
+    ? EM_URL . 'user/order.php?action=cancel&out_trade_no=' . rawurlencode($order_info['out_trade_no'])
+    : '';
+
 
 $isMobile = isMobile();
 $home_icon = Option::get('home_icon');
@@ -127,6 +134,46 @@ $home_icon = Option::get('home_icon');
             margin-top: 20px;
         }
 
+        .payment-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 18px;
+        }
+
+        .payment-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 110px;
+            padding: 10px 16px;
+            border-radius: 999px;
+            border: 1px solid #d9d9d9;
+            background: #fff;
+            color: #333;
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .payment-link.primary {
+            background: #1677ff;
+            border-color: #1677ff;
+            color: #fff;
+        }
+
+        .payment-link.danger {
+            color: #cf1322;
+            border-color: rgba(207, 19, 34, 0.3);
+            background: rgba(255, 77, 79, 0.06);
+        }
+
+        .payment-link:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+        }
+
         .order-details {
             text-align: left;
             width: 80%;
@@ -164,6 +211,13 @@ $home_icon = Option::get('home_icon');
     <div class="footer">
         支付完成后，页面将自动跳转到订单页面
     </div>
+
+    <div class="payment-actions">
+        <a class="payment-link" href="<?= htmlspecialchars($detailUrl) ?>">退出</a>
+        <?php if (!empty($cancelUrl) && empty($order_info['pay_time']) && (int)($order_info['status'] ?? 0) === 0): ?>
+            <a class="payment-link danger" href="<?= htmlspecialchars($cancelUrl) ?>" onclick="return confirm('确认取消当前订单吗？');">取消订单</a>
+        <?php endif; ?>
+    </div>
 </div>
 
 
@@ -189,6 +243,9 @@ $home_icon = Option::get('home_icon');
                 success: function(e) {
                     if(e.data.is_pay){
                         location.href=e.data.url
+                    }else if(e.data.is_expired){
+                        alert('订单已超时，系统已自动取消');
+                        location.href=e.data.url;
                     }else{
                         setTimeout(function(){
                             checkPay()

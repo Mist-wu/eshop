@@ -483,6 +483,7 @@
                         <div class="form-group">
                             <label><?= $visitor_required['contact']['title'] ?></label>
                             <input type="text" name="contact" placeholder="<?= $visitor_required['contact']['placeholder_query'] ?>" class="form-control layui-input" required>
+                            <p class="form-hint">仅适用于下单时填写过<?= $visitor_required['contact']['title'] ?>的订单</p>
                         </div>
                         <?php endif; ?>
                         <?php if(isset($visitor_required['password'])): ?>
@@ -512,8 +513,8 @@
                 <div class="query-form">
                     <div class="form-group">
                         <label for="orderNumber">订单编号</label>
-                        <input type="text" name="order_no" placeholder="请输入订单编号" class="form-control layui-input" required>
-                        <p class="form-hint">订单编号可在手机付款记录中查看</p>
+                        <input type="text" name="order_no" placeholder="请输入站内订单号或支付订单号" class="form-control layui-input" required>
+                        <p class="form-hint">支持站内订单号和支付平台订单号；如该订单下单时未填写联系方式，请优先使用此方式</p>
                     </div>
                 </div>
                 <input name="token" value="<?= LoginAuth::genToken() ?>" type="hidden"/>
@@ -566,6 +567,100 @@
         var searchLoading = false;
         var searchHasMore = true;
 
+        function escapeHtmlAttr(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
+        function buildVisitorOrderActions(order) {
+            var html = '';
+            var detailUrl = order.detail_url ? order.detail_url : ('visitors.php?action=visitors_order&order_id=' + order.id);
+            if (order.status == 0) {
+                html += '<a href="javascript:;" class="action-btn danger js-cancel-visitor-order" data-out-trade-no="' + escapeHtmlAttr(order.out_trade_no) + '">取消订单</a>';
+            }
+            html += '<a href="' + detailUrl + '" class="action-btn">订单详情</a>';
+            return html;
+        }
+
+        function refreshVisitorOrders() {
+            if (searchMode === 'local') {
+                localOrdersPage = 1;
+                localOrdersHasMore = true;
+                loadLocalOrders(1, false);
+                return;
+            }
+
+            if (searchMode === 'info') {
+                searchPage = 1;
+                searchHasMore = true;
+                $.ajax({
+                    type: "POST",
+                    url: "<?= EM_URL ?>/user/visitors.php?action=visitors_search_by_info",
+                    data: Object.assign({}, searchParams, {page: 1}),
+                    dataType: "json",
+                    success: function (e) {
+                        if (e.code == 200 && e.data && e.data.list) {
+                            renderOrders(e.data.list);
+                            searchHasMore = e.data.hasMore;
+                        }
+                    }
+                });
+                return;
+            }
+
+            if (searchMode === 'order') {
+                $.ajax({
+                    type: "POST",
+                    url: "<?= EM_URL ?>/user/visitors.php?action=visitors_search_order",
+                    data: searchParams,
+                    dataType: "json",
+                    success: function (e) {
+                        if (e.code == 200 && e.data && e.data.list) {
+                            renderOrders(e.data.list);
+                        } else {
+                            renderOrders([]);
+                        }
+                    }
+                });
+            }
+        }
+
+        function cancelVisitorOrder(outTradeNo) {
+            var payload = { out_trade_no: outTradeNo };
+            if (searchMode === 'info' || searchMode === 'order') {
+                payload = Object.assign({}, searchParams, payload);
+            }
+
+            layer.confirm('确认取消当前订单吗？', {icon: 3, title: '取消订单'}, function(index){
+                layer.close(index);
+                $.ajax({
+                    type: "POST",
+                    url: "<?= EM_URL ?>/user/visitors.php?action=cancel",
+                    data: payload,
+                    dataType: "json",
+                    success: function (e) {
+                        if (e.code == 200) {
+                            layer.msg('订单已取消');
+                            refreshVisitorOrders();
+                        } else {
+                            layer.msg(e.msg || '取消失败');
+                        }
+                    },
+                    error: function () {
+                        layer.msg('取消失败，请稍后重试');
+                    }
+                });
+            });
+            return false;
+        }
+
+        $(document).on('click', '.js-cancel-visitor-order', function () {
+            return cancelVisitorOrder($(this).attr('data-out-trade-no'));
+        });
+
         // 渲染订单列表的通用函数
         function renderOrders(orders) {
             $('#local-orders-container').html('');
@@ -617,7 +712,7 @@
                     '<span class="order-total-value">¥' + order.amount + '</span>' +
                     '</div>' +
                     '<div class="order-actions">' +
-                    '<a href="order.php?action=detail&out_trade_no=' + order.out_trade_no + '" class="action-btn">订单详情</a>' +
+                    buildVisitorOrderActions(order) +
                     '</div>' +
                     '</div>' +
                     '</div>';
@@ -735,7 +830,7 @@
                                     '<span class="order-total-value">¥' + order.amount + '</span>' +
                                     '</div>' +
                                     '<div class="order-actions">' +
-                                    '<a href="order.php?action=detail&out_trade_no=' + order.out_trade_no + '" class="action-btn">订单详情</a>' +
+                                    buildVisitorOrderActions(order) +
                                     '</div>' +
                                     '</div>' +
                                     '</div>';
@@ -831,7 +926,7 @@
                                 '<span class="order-total-value">¥' + order.amount + '</span>' +
                                 '</div>' +
                                 '<div class="order-actions">' +
-                                '<a href="order.php?action=detail&out_trade_no=' + order.out_trade_no + '" class="action-btn">订单详情</a>' +
+                                buildVisitorOrderActions(order) +
                                 '</div>' +
                                 '</div>' +
                                 '</div>';
@@ -980,6 +1075,7 @@
         form.on('submit(submit-order)', function(data){
             var field = data.field;
             console.log(field);
+            searchParams = field;
             var loadIndex = layer.load(2);
             $.ajax({
                 type: "POST",

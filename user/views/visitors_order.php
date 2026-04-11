@@ -401,7 +401,10 @@
                                 <span class="order-total-value">￥<?= $val['amount'] ?></span>
                             </div>
                             <div class="order-actions">
-                                <a href="order.php?action=detail&out_trade_no=<?= $val['out_trade_no'] ?>" class="action-btn">订单详情</a>
+                                <?php if($val['status'] == 0): ?>
+                                    <a href="javascript:;" class="action-btn danger" onclick="return cancelVisitorOrder('<?= htmlspecialchars($val['out_trade_no'], ENT_QUOTES) ?>');">取消订单</a>
+                                <?php endif; ?>
+                                <a href="<?= htmlspecialchars($val['detail_url'] ?? ('visitors.php?action=visitors_order&order_id=' . (int)$val['id'])) ?>" class="action-btn">订单详情</a>
                                 <?php if($val['status'] == 0): ?>
 <!--                                    <a href="../pay.php?out_trade_no=--><?php //= $val['out_trade_no'] ?><!--" class="action-btn primary">立即支付</a>-->
                                 <?php endif; ?>
@@ -446,6 +449,57 @@
         <?php endif; ?>
     </div>
 </div>
+
+<script>
+    function cancelVisitorOrder(outTradeNo) {
+        var search = new URLSearchParams(window.location.search);
+        var payload = { out_trade_no: outTradeNo };
+        if (search.get('contact')) {
+            payload.contact = search.get('contact');
+        }
+        if (search.get('password')) {
+            payload.password = search.get('password');
+        }
+
+        if (!window.confirm('确认取消当前订单吗？')) {
+            return false;
+        }
+
+        $.ajax({
+            type: 'POST',
+            url: '<?= EM_URL ?>/user/visitors.php?action=cancel',
+            data: payload,
+            dataType: 'json',
+            success: function (e) {
+                if (e.code == 200) {
+                    if (window.layui && layui.layer) {
+                        layui.layer.msg('订单已取消', {time: 1200}, function () {
+                            window.location.reload();
+                        });
+                    } else {
+                        alert('订单已取消');
+                        window.location.reload();
+                    }
+                } else {
+                    if (window.layui && layui.layer) {
+                        layui.layer.msg(e.msg || '取消失败');
+                    } else {
+                        alert(e.msg || '取消失败');
+                    }
+                }
+            },
+            error: function () {
+                if (window.layui && layui.layer) {
+                    layui.layer.msg('取消失败，请稍后重试');
+                } else {
+                    alert('取消失败，请稍后重试');
+                }
+            }
+        });
+
+        return false;
+    }
+</script>
 
 <script>
     $(function () {

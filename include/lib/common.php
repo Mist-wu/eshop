@@ -169,6 +169,7 @@ function orderStatusText($status){
     if($status == 1) $text = '待发货';
     if($status == 2) $text = '已完成';
     if($status == -1) $text = '部分发货';
+    if($status == -2) $text = '已取消';
     return $text;
 }
 
