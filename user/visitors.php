@@ -48,77 +48,43 @@ if (empty($action)) {
 }
 
 if($action == 'visitors_order'){
-
+    $db = Database::getInstance();
+    $prefix = DB_PREFIX;
+    $out_trade_no = Input::getStrVar('out_trade_no');
     $order_id = Input::getIntVar('order_id');
-    $include_deleted = Input::getIntVar('include_deleted', 0);
-    if(empty($order_id)){
-        emMsg('订单ID不能为空');
-    }
 
-    if ($include_deleted) {
-        $db = Database::getInstance();
-        $prefix = DB_PREFIX;
+    if (!empty($out_trade_no)) {
+        $order = $orderModel->getOrderByOrderNo($out_trade_no, true);
+    } elseif (!empty($order_id)) {
         $order = $db->once_fetch_array("SELECT * FROM {$prefix}order WHERE id = {$order_id} LIMIT 1");
     } else {
-        $order = $orderModel->getOrderInfoId($order_id);
+        emMsg('订单号不能为空', EM_URL . 'user/visitors.php');
     }
+
     if(empty($order)){
-        emMsg('订单不存在');
+        emMsg('订单不存在', EM_URL . 'user/visitors.php');
     }
 
-    // 构建订单列表数据（单个订单）
-    $order['status_text'] = orderStatusText($order['status']);
-    $order['amount'] /= 100;
-    $order['pay_time_text'] = empty($order['pay_time']) ? '未付款' : date('Y-m-d H:i:s', $order['pay_time']);
-
-    $order_list = $orderModel->getOrderList($order_id);
-    $prefix = DB_PREFIX;
-    $db = Database::getInstance();
-
-    foreach($order_list as $key => $row){
-        $goods_sql = "SELECT title, type, cover FROM {$prefix}goods WHERE id = {$row['goods_id']}";
-        $goods = $db->once_fetch_array($goods_sql);
-
-        $order_list[$key]['title'] = $goods['title'] ?? '商品已删除';
-        $order_list[$key]['type'] = $goods['type'] ?? '';
-        $order_list[$key]['cover'] = $goods['cover'] ?? '';
-        $order_list[$key]['goods_url'] = Url::goods($row['goods_id']);
-        $order_list[$key]['url'] = Url::goods($row['goods_id']);
-        $order_list[$key]['out_trade_no'] = $order['out_trade_no'];
-        $order_list[$key]['up_no'] = $order['up_no'] ?? '';
-        $order_list[$key]['create_time'] = $order['create_time'];
-        $order_list[$key]['pay_time'] = $order['pay_time'] ?? '';
-        $order_list[$key]['pay_time_text'] = $order['pay_time_text'];
-        $order_list[$key]['status'] = $order['status'];
-        $order_list[$key]['status_text'] = $order['status_text'];
-        $order_list[$key]['amount'] = $order['amount'];
-        $order_list[$key]['payment'] = $order['payment'] ?? '';
-        $order_list[$key]['detail_url'] = EM_URL . 'user/visitors.php?action=visitors_order&order_id=' . (int)$order['id'] . (!empty($order['delete_time']) ? '&include_deleted=1' : '');
-
-        $_text = empty($row['attach_user']) ? [] : json_decode($row['attach_user'], true);
-        $order_list[$key]['attach_user_text'] = '';
-        if(!empty($_text)){
-            foreach($_text as $k => $v){
-                $order_list[$key]['attach_user_text'] .= $k . "：" . $v . "；";
-            }
-        }
-
-        // 处理规格信息
-        if (in_array($goods['type'] ?? '', ['em_auto', 'em_manual']) && function_exists('emFormatSkuOptionIds')) {
-            $order_list[$key]['attr_spec'] = emFormatSkuOptionIds($row['goods_id'], $row['sku'] ?? '');
-        } else {
-            $order_list[$key]['attr_spec'] = empty($row['attr_spec']) ? '默认规格' : $row['attr_spec'];
-        }
-
-        $order_list[$key]['unit_price'] /= 100;
+    $child_order = $db->once_fetch_array("SELECT * FROM {$prefix}order_list WHERE order_id = {$order['id']} LIMIT 1");
+    if (empty($child_order)) {
+        emMsg('订单详情不存在', EM_URL . 'user/visitors.php');
     }
 
-    $orders = $order_list;
-    $order_count = 1;
+    $goods = $db->once_fetch_array("SELECT * FROM {$prefix}goods WHERE id = {$child_order['goods_id']} LIMIT 1");
+    if (empty($goods)) {
+        emMsg('商品不存在或已删除', EM_URL . 'user/visitors.php');
+    }
 
+    $func = "orderDetail" . ucfirst($goods['type']);
+    if (!function_exists($func)) {
+        emMsg('当前商品类型暂不支持查看详情', EM_URL . 'user/visitors.php');
+    }
+
+    $GLOBALS['EM_VISITOR_ORDER_VIEW'] = true;
     include View::getUserView('_header');
-    require_once(View::getUserView('visitors_order'));
+    $func($goods, $order, $child_order);
     include View::getUserView('_footer');
+    unset($GLOBALS['EM_VISITOR_ORDER_VIEW']);
     View::output();
 }
 
@@ -205,7 +171,7 @@ if($action == 'visitors_search_order'){
             'unit_price' => $row['unit_price'] / 100,
             'goods_url' => Url::goods($row['goods_id']),
             'url' => Url::goods($row['goods_id']),
-            'detail_url' => EM_URL . 'user/visitors.php?action=visitors_order&order_id=' . (int)$order['id'] . (!empty($order['delete_time']) ? '&include_deleted=1' : ''),
+            'detail_url' => EM_URL . 'user/visitors.php?action=visitors_order&out_trade_no=' . rawurlencode($order['out_trade_no']),
         ];
 
         // 处理规格信息

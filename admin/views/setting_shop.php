@@ -162,7 +162,7 @@
                             <div class="layui-form-item">
                                 <label class="layui-form-label">下单页面提示</label>
                                 <div class="layui-input-block">
-                                    <input type="text" name="config[guest_query_contact_placeholder_order]" value="<?= $guestQueryContactPlaceholderOrder ?>" placeholder="请输入您的联系方式" class="layui-input">
+                                    <input type="text" name="config[guest_query_contact_placeholder_order]" value="<?= $guestQueryContactPlaceholderOrder ?>" placeholder="请输入联系方式(用于订单查询)" class="layui-input">
                                 </div>
                             </div>
 

@@ -404,7 +404,7 @@
                                 <?php if($val['status'] == 0): ?>
                                     <a href="javascript:;" class="action-btn danger" onclick="return cancelVisitorOrder('<?= htmlspecialchars($val['out_trade_no'], ENT_QUOTES) ?>');">取消订单</a>
                                 <?php endif; ?>
-                                <a href="<?= htmlspecialchars($val['detail_url'] ?? ('visitors.php?action=visitors_order&order_id=' . (int)$val['id'])) ?>" class="action-btn">订单详情</a>
+                                <a href="<?= htmlspecialchars($val['detail_url'] ?? ('visitors.php?action=visitors_order&out_trade_no=' . rawurlencode($val['out_trade_no'] ?? ''))) ?>" class="action-btn">订单详情</a>
                                 <?php if($val['status'] == 0): ?>
 <!--                                    <a href="../pay.php?out_trade_no=--><?php //= $val['out_trade_no'] ?><!--" class="action-btn primary">立即支付</a>-->
                                 <?php endif; ?>

@@ -577,7 +577,7 @@
 
         function buildVisitorOrderActions(order) {
             var html = '';
-            var detailUrl = order.detail_url ? order.detail_url : ('visitors.php?action=visitors_order&order_id=' + order.id);
+            var detailUrl = order.detail_url ? order.detail_url : ('visitors.php?action=visitors_order&out_trade_no=' + encodeURIComponent(order.out_trade_no));
             if (order.status == 0) {
                 html += '<a href="javascript:;" class="action-btn danger js-cancel-visitor-order" data-out-trade-no="' + escapeHtmlAttr(order.out_trade_no) + '">取消订单</a>';
             }

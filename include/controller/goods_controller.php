@@ -137,7 +137,7 @@ class Goods_Controller {
                 'title' => $title_map[$contact_type] ?? '联系方式',
                 'value' => $contact_value,
                 'contact_type' => $contact_type,
-                'placeholder_order' => Option::get('guest_query_contact_placeholder_order') ?: '请输入您的联系方式',
+                'placeholder_order' => Option::get('guest_query_contact_placeholder_order') ?: '请输入联系方式(用于订单查询)',
                 'placeholder_query' => Option::get('guest_query_contact_placeholder_query') ?: '请输入您下单时填写的联系方式'
             ];
         }

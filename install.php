@@ -713,7 +713,7 @@ INSERT INTO {$db_prefix}options (option_name, option_value) VALUES
 ('logo', ''),
 ('guest_query_contact_switch', 'y'),
 ('guest_query_contact_type', 'any'),
-('guest_query_contact_placeholder_order', '请输入您的联系方式'),
+('guest_query_contact_placeholder_order', '请输入联系方式(用于订单查询)'),
 ('guest_query_contact_placeholder_query', '请输入您下单时填写的联系方式'),
 ('guest_query_password_switch', 'n'),
 ('guest_query_password_placeholder_order', '请设置订单密码'),
