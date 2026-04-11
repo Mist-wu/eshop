@@ -47,6 +47,7 @@ $can_login = Option::get('login_switch') == 'y';
 $can_register = Option::get('register_switch') == 'y';
 $is_user_login = ISLOGIN === true;
 $show_user_entry = $is_user_login || $can_login || $can_register;
+$template_style_version = @filemtime(TEMPLATE_PATH . 'css/style.css') ?: Option::EM_VERSION_TIMESTAMP;
 
 $user_avatar = '';
 $user_name = '';
@@ -80,7 +81,7 @@ if ($is_user_login) {
 
     <link rel="stylesheet" href="<?= EM_URL ?>content/static/css/em.css?v=<?= Option::EM_VERSION_TIMESTAMP ?>">
     <link rel="stylesheet" href="<?= EM_URL ?>content/common/common.css?v=<?= Option::EM_VERSION_TIMESTAMP ?>">
-    <link href="<?= TEMPLATE_URL ?>css/style.css?v=<?= Option::EM_VERSION_TIMESTAMP ?>" rel="stylesheet"/>
+    <link href="<?= TEMPLATE_URL ?>css/style.css?v=<?= $template_style_version ?>" rel="stylesheet"/>
 
     <script src="<?= EM_URL ?>content/static/js/em.js?v=<?= Option::EM_VERSION_TIMESTAMP ?>"></script>
     <script src="<?= TEMPLATE_URL ?>js/main.js?v=<?= Option::EM_VERSION_TIMESTAMP ?>"></script>

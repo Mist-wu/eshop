@@ -12,7 +12,7 @@ function yifutRegisterPaymentMethods() {
     if (emEnvBool('EM_YIFUT_ENABLE_ALIPAY', true)) {
         $GLOBALS['mode_payment'][] = [
             'plugin_name' => 'yifut_alipay',
-            'icon' => EM_URL . 'content/payment-icons/alipay.svg',
+            'icon' => yifutAssetUrl('content/payment-icons/alipay-official.png'),
             'title' => '支付宝',
             'unique' => 'yifut_alipay',
             'name' => '支付宝',
@@ -22,12 +22,23 @@ function yifutRegisterPaymentMethods() {
     if (emEnvBool('EM_YIFUT_ENABLE_WXPAY', true)) {
         $GLOBALS['mode_payment'][] = [
             'plugin_name' => 'yifut_wxpay',
-            'icon' => EM_URL . 'content/payment-icons/wechat.svg',
+            'icon' => yifutAssetUrl('content/payment-icons/wechat.svg'),
             'title' => '微信支付',
             'unique' => 'yifut_wxpay',
             'name' => '微信支付',
         ];
     }
+}
+
+function yifutAssetUrl($relativePath) {
+    $path = EM_ROOT . '/' . ltrim($relativePath, '/');
+    $url = EM_URL . ltrim($relativePath, '/');
+
+    if (is_file($path)) {
+        return $url . '?v=' . filemtime($path);
+    }
+
+    return $url;
 }
 
 function pay_yifut_alipay($order_info, $order_list) {
