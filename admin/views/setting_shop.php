@@ -124,7 +124,7 @@
                 // 游客查单模式配置
                 $guestQueryContactSwitch = $guest_query_contact_switch ?? 'n';
                 $guestQueryContactType = $guest_query_contact_type ?? 'any';
-                $guestQueryContactPlaceholderOrder = $guest_query_contact_placeholder_order ?? '请输入您的联系方式';
+                $guestQueryContactPlaceholderOrder = $guest_query_contact_placeholder_order ?? '请输入联系方式(用于订单查询)';
                 $guestQueryContactPlaceholderQuery = $guest_query_contact_placeholder_query ?? '请输入您下单时填写的联系方式';
                 $guestQueryPasswordSwitch = $guest_query_password_switch ?? 'n';
                 $guestQueryPasswordPlaceholderOrder = $guest_query_password_placeholder_order ?? '请设置订单密码';

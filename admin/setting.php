@@ -503,7 +503,9 @@ if ($action == 'shop') {
     // 游客查单模式配置 - 设置默认值
     $guest_query_contact_switch = $guest_query_contact_switch ?? 'y'; // 默认开启
     $guest_query_contact_type = $guest_query_contact_type ?? 'any'; // 默认任意
-    $guest_query_contact_placeholder_order = $guest_query_contact_placeholder_order ?? '请输入联系方式(用于订单查询)';
+    if (empty($guest_query_contact_placeholder_order) || $guest_query_contact_placeholder_order === '请输入您的联系方式') {
+        $guest_query_contact_placeholder_order = '请输入联系方式(用于订单查询)';
+    }
     $guest_query_contact_placeholder_query = $guest_query_contact_placeholder_query ?? '请输入您下单时填写的联系方式';
     $guest_query_password_switch = $guest_query_password_switch ?? 'n'; // 默认关闭
     $guest_query_password_placeholder_order = $guest_query_password_placeholder_order ?? '请设置订单密码';
