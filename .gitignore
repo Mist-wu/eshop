@@ -1,0 +1,25 @@
+# emshop
+.htaccess
+.user.ini
+.CLAUDE.md
+Dockerfile
+# config.php
+/content/backup/*.sql
+/content/cache/*
+/content/uploadfile/*
+
+# IDE
+.project
+.settings
+.buildpath
+.cache
+.idea
+.claude
+.netbeans
+.DS_Store
+.env
+!.env.example
+
+# docker
+db_data/*
+

@@ -1,0 +1,7 @@
+#
+# robots.txt for emshop
+#
+
+User-agent: *
+Disallow: /admin/
+Disallow: /config.php

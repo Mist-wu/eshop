@@ -1,0 +1,634 @@
+/* ==================== EMSHOP 安装程序样式 ==================== */
+
+:root {
+    --ink: #0f172a;
+    --ink-soft: #334155;
+    --muted: #64748b;
+    --brand: #0f766e;
+    --brand-strong: #0b5f59;
+    --brand-soft: #0f8b8d;
+    --accent: #f59e0b;
+    --surface: rgba(255, 255, 255, 0.86);
+    --card: rgba(255, 255, 255, 0.96);
+    --border: rgba(255, 255, 255, 0.65);
+    --shadow-strong: 0 32px 90px rgba(15, 23, 42, 0.22);
+    --shadow-soft: 0 18px 50px rgba(15, 23, 42, 0.14);
+    --radius-lg: 24px;
+    --radius-md: 18px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    min-height: 100vh;
+    background: radial-gradient(1200px circle at 8% 12%, rgba(15, 118, 110, 0.22), transparent 55%),
+        radial-gradient(900px circle at 90% 8%, rgba(245, 158, 11, 0.18), transparent 50%),
+        linear-gradient(160deg, #f4f5f3 0%, #eef2ef 45%, #fef9ef 100%);
+    font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: var(--ink);
+    padding: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* 背景纹理 */
+.bg-grid {
+    position: fixed;
+    inset: 0;
+    background-image: linear-gradient(rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+    opacity: 0.25;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.bg-orb {
+    position: fixed;
+    width: 420px;
+    height: 420px;
+    border-radius: 50%;
+    filter: blur(0px);
+    opacity: 0.7;
+    z-index: 0;
+    animation: float 14s ease-in-out infinite;
+}
+
+.bg-orb.orb-1 {
+    top: -140px;
+    left: -120px;
+    background: radial-gradient(circle at 30% 30%, rgba(15, 118, 110, 0.55), transparent 60%);
+}
+
+.bg-orb.orb-2 {
+    bottom: -160px;
+    right: -120px;
+    background: radial-gradient(circle at 40% 40%, rgba(245, 158, 11, 0.5), transparent 60%);
+    animation-delay: -6s;
+}
+
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-18px);
+    }
+}
+
+/* 背景 Logo */
+.bg-logo {
+    position: fixed;
+    bottom: 6%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: clamp(80px, 16vw, 220px);
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: rgba(15, 23, 42, 0.05);
+    pointer-events: none;
+    z-index: 0;
+    white-space: nowrap;
+}
+
+/* 主容器 */
+.install-shell {
+    position: relative;
+    z-index: 1;
+    width: min(1080px, 100%);
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    animation: liftIn 0.6s ease-out;
+}
+
+.install-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    align-items: start;
+}
+
+.install-grid .layui-card:only-child {
+    grid-column: 1 / -1;
+}
+
+@keyframes liftIn {
+    from {
+        opacity: 0;
+        transform: translateY(24px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 品牌面板 */
+.brand-panel {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    padding: 36px;
+    background: linear-gradient(140deg, #0b5f59 0%, #0f766e 55%, #0f8b8d 100%);
+    color: #f8fafc;
+    box-shadow: var(--shadow-strong);
+    display: flex;
+    flex-direction: column;
+    min-height: 540px;
+}
+
+.brand-panel::before,
+.brand-panel::after {
+    content: "";
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.25), transparent 70%);
+    opacity: 0.5;
+}
+
+.brand-panel::before {
+    width: 260px;
+    height: 260px;
+    top: -120px;
+    right: -90px;
+}
+
+.brand-panel::after {
+    width: 220px;
+    height: 220px;
+    bottom: -120px;
+    left: -80px;
+}
+
+.brand-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: "Bricolage Grotesque", "Noto Sans SC", sans-serif;
+    font-size: 18px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+}
+
+.logo-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    position: relative;
+}
+
+.logo-dot::after {
+    content: "";
+    position: absolute;
+    inset: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 14px rgba(245, 158, 11, 0.6);
+}
+
+.brand-version {
+    margin-top: 12px;
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.16);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+}
+
+.brand-title {
+    margin-top: 24px;
+    font-family: "Bricolage Grotesque", "Noto Sans SC", sans-serif;
+    font-size: clamp(26px, 2.5vw, 34px);
+    line-height: 1.25;
+}
+
+.brand-subtitle {
+    margin-top: 12px;
+    font-size: 14px;
+    line-height: 1.8;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.brand-badges {
+    margin-top: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.brand-badges span {
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.14);
+    font-size: 12px;
+}
+
+.brand-list {
+    margin-top: auto;
+    display: grid;
+    gap: 16px;
+}
+
+.brand-item {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.brand-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.18);
+    position: relative;
+    flex-shrink: 0;
+}
+
+.brand-icon::before {
+    content: "";
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    top: 12px;
+    left: 12px;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.55);
+}
+
+.brand-item-title {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.brand-item-desc {
+    margin-top: 4px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+/* 表单面板 */
+.form-panel {
+    background: var(--surface);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-radius: var(--radius-lg);
+    padding: 28px 32px 32px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-soft);
+}
+
+.form-panel .layui-form {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.form-header {
+    margin-bottom: 2px;
+}
+
+.form-eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--brand);
+    font-weight: 600;
+}
+
+.form-title {
+    margin-top: 6px;
+    font-family: "Bricolage Grotesque", "Noto Sans SC", sans-serif;
+    font-size: 28px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    color: var(--ink);
+}
+
+.form-version {
+    font-size: 12px;
+    color: var(--brand);
+    background: rgba(15, 118, 110, 0.12);
+    padding: 4px 10px;
+    border-radius: 999px;
+}
+
+.form-subtitle {
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+/* 卡片样式 */
+.layui-card {
+    background: var(--card);
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+}
+
+.db-card {
+    border-top: 3px solid rgba(15, 118, 110, 0.35);
+}
+
+.admin-card {
+    border-top: 3px solid rgba(245, 158, 11, 0.35);
+}
+
+.layui-card-header {
+    background: linear-gradient(90deg, rgba(15, 118, 110, 0.08), rgba(245, 158, 11, 0.08));
+    padding: 16px 20px !important;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+    display: flex;
+    align-items: center;
+}
+
+.db-card .layui-card-header {
+    background: rgba(15, 118, 110, 0.08);
+}
+
+.admin-card .layui-card-header {
+    background: rgba(245, 158, 11, 0.12);
+}
+
+.layui-card-header span {
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    color: var(--ink);
+    display: inline-flex;
+    align-items: center;
+}
+
+.layui-card-header span::before {
+    content: "";
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    background: linear-gradient(135deg, var(--brand), var(--accent));
+    margin-right: 10px;
+}
+
+.db-card .layui-card-header span::before {
+    background: linear-gradient(135deg, var(--brand), var(--brand-soft));
+}
+
+.admin-card .layui-card-header span::before {
+    background: linear-gradient(135deg, var(--accent), #fbbf24);
+}
+
+.layui-card-body {
+    padding: 22px !important;
+}
+
+/* 表单项 */
+.layui-form-item {
+    margin-bottom: 18px;
+}
+
+.layui-form-item:last-child {
+    margin-bottom: 0;
+}
+
+.layui-form-label {
+    width: 110px !important;
+    font-size: 13px !important;
+    color: var(--ink-soft);
+    font-weight: 600;
+    padding: 10px 12px 10px 0 !important;
+    text-align: right;
+}
+
+.layui-input-block {
+    margin-left: 130px !important;
+}
+
+/* 输入框 */
+.layui-input {
+    height: 46px !important;
+    padding: 0 16px !important;
+    border: 1.5px solid #e2e8f0 !important;
+    border-radius: 12px !important;
+    font-size: 14px !important;
+    color: var(--ink) !important;
+    background: #fff !important;
+    box-shadow: 0 10px 18px rgba(15, 23, 42, 0.04);
+    transition: all 0.2s ease !important;
+}
+
+.layui-input:focus {
+    border-color: var(--brand) !important;
+    box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.2) !important;
+    outline: none !important;
+}
+
+.layui-input::placeholder {
+    color: #94a3b8;
+}
+
+/* 提示文字 */
+.form-tips {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+    padding-left: 2px;
+}
+
+/* 提交按钮 */
+.submit-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+    padding-top: 4px;
+}
+
+.layui-btn {
+    height: 52px !important;
+    min-width: 200px;
+    padding: 0 52px !important;
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    border-radius: 14px !important;
+    background: linear-gradient(135deg, var(--brand) 0%, var(--brand-soft) 60%, var(--accent) 100%);
+    border: none !important;
+    box-shadow: 0 18px 40px rgba(15, 118, 110, 0.3);
+    transition: all 0.3s ease !important;
+    cursor: pointer;
+    color: #fff !important;
+    position: relative;
+    overflow: hidden;
+}
+
+.layui-btn::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.6s ease;
+}
+
+.layui-btn:hover {
+    transform: translateY(-2px);
+}
+
+.layui-btn:hover::after {
+    transform: translateX(100%);
+}
+
+.layui-btn:active {
+    transform: translateY(0);
+}
+
+.layui-btn:focus-visible {
+    outline: 3px solid rgba(15, 118, 110, 0.25);
+    outline-offset: 2px;
+}
+
+.submit-note {
+    font-size: 12px;
+    color: var(--muted);
+    text-align: right;
+}
+
+/* 取消输入框自动填充的背景色 */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+    -webkit-text-fill-color: var(--ink) !important;
+    transition: background-color 5000s ease-in-out 0s !important;
+}
+
+/* ==================== 响应式布局 ==================== */
+@media (max-width: 1024px) {
+    body {
+        padding: 28px 20px;
+        align-items: flex-start;
+    }
+
+    .install-shell {
+        grid-template-columns: 1fr;
+    }
+
+    .install-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .brand-panel {
+        order: 2;
+        max-height: none;
+    }
+
+    .form-panel {
+        order: 1;
+    }
+
+    .brand-panel {
+        min-height: auto;
+    }
+}
+
+@media (max-width: 768px) {
+    .form-panel {
+        padding: 24px;
+    }
+
+    .layui-form-label {
+        width: 100px !important;
+        padding: 10px 10px 10px 0 !important;
+    }
+
+    .layui-input-block {
+        margin-left: 115px !important;
+    }
+
+    .bg-logo {
+        font-size: clamp(72px, 20vw, 160px);
+    }
+}
+
+@media (max-width: 576px) {
+    body {
+        padding: 22px 14px;
+    }
+
+    .brand-panel {
+        padding: 28px 22px;
+    }
+
+    .form-panel {
+        padding: 22px 18px 26px;
+    }
+
+    .layui-form-item {
+        margin-bottom: 16px;
+    }
+
+    .layui-form-label {
+        display: block;
+        width: 100% !important;
+        text-align: left;
+        padding: 0 0 8px 0 !important;
+        font-size: 14px !important;
+    }
+
+    .layui-input-block {
+        margin-left: 0 !important;
+    }
+
+    .layui-input {
+        height: 48px !important;
+        font-size: 16px !important;
+        border-radius: 10px !important;
+    }
+
+    .submit-wrap {
+        align-items: stretch;
+    }
+
+    .submit-note {
+        text-align: left;
+    }
+
+    .layui-btn {
+        width: 100%;
+        height: 50px !important;
+        border-radius: 12px !important;
+    }
+}
+
+@media (max-width: 420px) {
+    .form-title {
+        font-size: 24px;
+    }
+
+    .brand-title {
+        font-size: 24px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
