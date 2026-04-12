@@ -10,6 +10,61 @@
 
 require_once 'globals.php';
 
+function clearCacheDirectory($dir) {
+    $entries = scandir($dir);
+    if ($entries === false) {
+        return false;
+    }
+
+    foreach ($entries as $entry) {
+        if ($entry === '.' || $entry === '..') {
+            continue;
+        }
+
+        $path = $dir . DIRECTORY_SEPARATOR . $entry;
+        if (is_dir($path)) {
+            if (!clearCacheDirectory($path) || !@rmdir($path)) {
+                return false;
+            }
+            continue;
+        }
+
+        if (!@unlink($path)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+if ($action === 'add_shortcut') {
+    $shortcut = Input::postStrArray('shortcut');
+    $shortcutSet = [];
+    foreach ($shortcut as $item) {
+        $item = explode('||', $item);
+        $shortcutSet[] = [
+            'name' => $item[0],
+            'url'  => $item[1]
+        ];
+    }
+    Option::updateOption('shortcut', json_encode($shortcutSet, JSON_UNESCAPED_UNICODE));
+    $CACHE->updateCache('options');
+    emDirect('./index.php?add_shortcut_suc=1');
+}
+
+if ($action === 'delete_cache') {
+    $dir = EM_ROOT . '/content/cache';
+    if (!is_dir($dir)) {
+        Output::error('缓存目录不存在');
+    }
+
+    if (!clearCacheDirectory($dir)) {
+        Output::error('清理缓存失败，请检查目录权限');
+    }
+
+    Output::ok();
+}
+
 if (empty($action)) {
     $db = Database::getInstance();
     $db_prefix = DB_PREFIX;
@@ -78,60 +133,5 @@ SQL;
     require_once(View::getAdmView('templates/default/index/index'));
     include View::getAdmView('footer');
     View::output();
-
-
-if ($action === 'add_shortcut') {
-    $shortcut = Input::postStrArray('shortcut');
-    $shortcutSet = [];
-    foreach ($shortcut as $item) {
-        $item = explode('||', $item);
-        $shortcutSet[] = [
-            'name' => $item[0],
-            'url'  => $item[1]
-        ];
-    }
-    Option::updateOption('shortcut', json_encode($shortcutSet, JSON_UNESCAPED_UNICODE));
-    $CACHE->updateCache('options');
-    emDirect("./index.php?add_shortcut_suc=1");
-}
-
-if($action == 'delete_cache'){
-    $dir = EM_ROOT . "/content/cache";
-    // 检查目录是否存在
-    if (!is_dir($dir)) {
-        output::error('缓存目录不存在');
-    }
-
-    // 打开目录
-    $handle = opendir($dir);
-    if (!$handle) {
-        output::error('缓存目录无权限');
-    }
-
-    // 遍历目录
-    while (false !== ($file = readdir($handle))) {
-        // 跳过当前目录（.）和上级目录（..）
-        if ($file === '.' || $file === '..') {
-            continue;
-        }
-
-        $filePath = $dir . DIRECTORY_SEPARATOR . $file;
-
-        // 如果是文件则删除
-        if (is_file($filePath)) {
-            unlink($filePath); // 删除文件
-        }
-        // 如果是子目录，可以根据需求决定是否递归删除（这里仅删除文件，不处理子目录）
-        // else if (is_dir($filePath)) {
-        //     // 递归删除子目录下的文件（可选）
-        //     deleteDirFiles($filePath);
-        // }
-    }
-
-    // 关闭目录句柄
-    closedir($handle);
-    output::ok();
-}
-
 }
 

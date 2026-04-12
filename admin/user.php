@@ -170,14 +170,15 @@ if ($action == 'edit_ajax') {
     $role = isset($_POST['role']) ? addslashes(trim($_POST['role'])) : User::ROLE_WRITER;
     $uid = isset($_POST['uid']) ? (int)$_POST['uid'] : '';
     $tel = Input::postStrVar('tel');
+    $isFounderTarget = User::isFounderUid($uid);
 
     LoginAuth::checkToken();
 
     //创始人账户不能被他人编辑
-    if (!User::isFounder() && $uid === 1) {
+    if (!User::isFounder() && $isFounderTarget) {
         emDirect('./user.php?error_del_b=1');
     }
-    if ($uid === 1) {
+    if ($isFounderTarget) {
         $role = User::ROLE_ADMIN;
     }
     if (empty($nickname)) {
@@ -221,15 +222,14 @@ if ($action == 'edit_ajax') {
 
 if ($action == 'del') {
     LoginAuth::checkToken();
-    $ids = Input::postStrVar('ids');
-    $ids = explode(',', $ids);
+    $ids = array_map('intval', explode(',', Input::postStrVar('ids')));
     $ids_arr = [];
-    foreach($ids as $key => $val){
-        if($val != 1){
+    foreach ($ids as $val) {
+        if ($val > 0 && !User::isFounderUid($val)) {
             $ids_arr[] = $val;
         }
     }
-    if(empty($ids_arr)){
+    if (empty($ids_arr)) {
         output::ok();
     }
     $ids = implode(',', $ids_arr);
@@ -249,12 +249,12 @@ if ($action == 'del') {
 
 if ($action == 'forbid') {
     LoginAuth::checkToken();
-    $uid = Input::postStrVar('ids');
+    $uid = (int)Input::postStrVar('ids');
     if (UID == $uid) {
         output::ok();
     }
     //创始人账户不能被禁用
-    if ($uid == 1) {
+    if (User::isFounderUid($uid)) {
         output::ok();
     }
     $User_Model->forbidUser($uid);
@@ -263,7 +263,7 @@ if ($action == 'forbid') {
 
 if ($action == 'unforbid') {
     LoginAuth::checkToken();
-    $uid = Input::postStrVar('ids');
+    $uid = (int)Input::postStrVar('ids');
     $User_Model->unforbidUser($uid);
     output::ok();
 }

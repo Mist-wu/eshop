@@ -1,6 +1,5 @@
 # emshop
 .htaccess
-.user.ini
 .CLAUDE.md
 Dockerfile
 # config.php
@@ -17,6 +16,8 @@ Dockerfile
 .claude
 .netbeans
 .DS_Store
+._*
+__MACOSX/
 .env
 !.env.example
 

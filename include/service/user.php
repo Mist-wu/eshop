@@ -10,9 +10,28 @@ class User {
     const ROLE_VISITOR = 'visitor'; // 游客
     const ROLE_EDITOR = 'editor';   // 内容编辑
 
+    static function getFounderUid() {
+        static $founderUid = null;
+        if ($founderUid !== null) {
+            return $founderUid;
+        }
+
+        $db = Database::getInstance();
+        $row = $db->once_fetch_array(
+            "SELECT uid FROM " . DB_PREFIX . "user WHERE role = '" . self::ROLE_ADMIN . "' ORDER BY create_time ASC, uid ASC LIMIT 1"
+        );
+        $founderUid = empty($row['uid']) ? 0 : (int)$row['uid'];
+
+        return $founderUid;
+    }
+
+    static function isFounderUid($uid) {
+        return (int)$uid === self::getFounderUid();
+    }
+
     static function isFounder($role = ROLE, $uid = UID) {
         $uid = (int)$uid;
-        return $role == self::ROLE_ADMIN && $uid === 1;
+        return $role == self::ROLE_ADMIN && self::isFounderUid($uid);
     }
 
     static function isAdmin($role = ROLE) {
@@ -59,7 +78,7 @@ class User {
         $role_name = '';
         switch ($role) {
             case self::ROLE_ADMIN:
-                $role_name = $uid == 1 ? '超级管理员' : '管理员';
+                $role_name = self::isFounderUid($uid) ? '超级管理员' : '管理员';
                 break;
             case self::ROLE_EDITOR:
                 $role_name = '内容编辑';

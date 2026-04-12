@@ -154,10 +154,20 @@ class LoginAuth {
     }
 
     private static function generateAuthCookie($user_login, $expiration) {
-        $key = self::emHash($user_login . '|' . $expiration);
+        $type = isEmail($user_login) ? 'email' : 'tel';
+        $user = self::getUserDataByLogin($user_login, $type);
+        if (!$user || empty($user['password'])) {
+            return '';
+        }
+
+        $key = self::getAuthCookieKey($user_login, $expiration, $user['password']);
         $hash = hash_hmac('md5', $user_login . '|' . $expiration, $key);
 
         return $user_login . '|' . $expiration . '|' . $hash;
+    }
+
+    private static function getAuthCookieKey($user_login, $expiration, $passwordHash) {
+        return self::emHash($user_login . '|' . $expiration . '|' . $passwordHash);
     }
 
     private static function emHash($data) {
@@ -180,17 +190,17 @@ class LoginAuth {
             return false;
         }
 
-        $key = self::emHash($username . '|' . $expiration);
-        $hash = hash_hmac('md5', $username . '|' . $expiration, $key);
-
-        if ($hmac !== $hash) {
-            return false;
-        }
-
         $type = isEmail($username) ? 'email' : 'tel';
 
         $user = self::getUserDataByLogin($username, $type);
-        if (!$user) {
+        if (!$user || empty($user['password'])) {
+            return false;
+        }
+
+        $key = self::getAuthCookieKey($username, $expiration, $user['password']);
+        $hash = hash_hmac('md5', $username . '|' . $expiration, $key);
+
+        if (!hash_equals($hash, $hmac)) {
             return false;
         }
         return $user;
