@@ -12,6 +12,7 @@ $secrets = emGetOrderSecrets($child_order['id']);
 $emGoods = $db->once_fetch_array("SELECT * FROM " . DB_PREFIX . "em_goods WHERE goods_id = " . (int)$goods['id']);
 $orderNo = $order['out_trade_no'] ?? '';
 $orderStatus = (int)($order['status'] ?? $child_order['status'] ?? 0);
+$merchantRemark = trim((string)($goods['pay_content'] ?? ''));
 $isVisitorView = !empty($GLOBALS['EM_VISITOR_ORDER_VIEW']);
 $canManageUnpaid = !empty($orderNo) && empty($order['pay_time']) && $orderStatus === 0;
 $repayUrl = $canManageUnpaid ? EM_URL . '?action=pay&out_trade_no=' . rawurlencode($orderNo) : '';
@@ -60,6 +61,13 @@ $backText = $isVisitorView ? '返回游客查单' : '返回订单列表';
             </div>
         </div>
     </div>
+
+    <?php if ($merchantRemark !== ''): ?>
+    <div class="order-merchant-note" style="margin-bottom: 20px; padding: 16px 18px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; color: #9a3412; line-height: 1.8;">
+        <div style="font-weight: 600; margin-bottom: 6px;">商户留言</div>
+        <div><?php echo $merchantRemark; ?></div>
+    </div>
+    <?php endif; ?>
 
     <?php if ($child_order['status'] == 2 && !empty($secrets)): ?>
     <div class="order-secrets" style="margin-bottom: 20px;">
