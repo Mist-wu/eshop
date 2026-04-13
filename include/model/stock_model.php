@@ -121,36 +121,23 @@ class Stock_Model {
     public function useStock($stock_id, $order_id, $order_list_id) {
         $timestamp = time();
 
-        // 获取当前库存信息
-        $stock = $this->getStockById($stock_id);
-        if (!$stock || $stock['status'] != self::STATUS_AVAILABLE) {
+        $sql = "UPDATE {$this->table} SET
+                used_count = used_count + 1,
+                use_time = {$timestamp},
+                status = CASE
+                    WHEN max_uses > 0 AND used_count + 1 >= max_uses THEN " . self::STATUS_USED_UP . "
+                    ELSE " . self::STATUS_AVAILABLE . "
+                END
+                WHERE id = {$stock_id}
+                AND status = " . self::STATUS_AVAILABLE . "
+                AND (max_uses = 0 OR used_count < max_uses)";
+        $this->db->query($sql);
+        if ((int)$this->db->affected_rows() < 1) {
             return false;
         }
 
-        // 检查是否还可用
-        if ($stock['max_uses'] > 0 && $stock['used_count'] >= $stock['max_uses']) {
-            return false;
-        }
-
-        // 写入使用记录
         $sql = "INSERT INTO {$this->table_usage} (stock_id, order_id, order_list_id, create_time)
                 VALUES ({$stock_id}, {$order_id}, {$order_list_id}, {$timestamp})";
-        $this->db->query($sql);
-
-        // 更新库存状态
-        $new_used_count = $stock['used_count'] + 1;
-        $new_status = self::STATUS_AVAILABLE;
-
-        // 如果是限次卡密且已达上限，标记为已用完
-        if ($stock['max_uses'] > 0 && $new_used_count >= $stock['max_uses']) {
-            $new_status = self::STATUS_USED_UP;
-        }
-
-        $sql = "UPDATE {$this->table} SET
-                used_count = {$new_used_count},
-                use_time = {$timestamp},
-                status = {$new_status}
-                WHERE id = {$stock_id}";
         $this->db->query($sql);
 
         return true;

@@ -7,6 +7,146 @@ require_once '../init.php';
 $action = Input::getStrVar('action');
 $orderModel = new Order_Model();
 
+function emVisitorEnsureSession() {
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        @session_start();
+    }
+}
+
+function emVisitorAuthorizedOrderSessionKey() {
+    return 'emshop_visitor_authorized_orders';
+}
+
+function emVisitorGetAuthorizedOrders() {
+    emVisitorEnsureSession();
+
+    $key = emVisitorAuthorizedOrderSessionKey();
+    $current = isset($_SESSION[$key]) && is_array($_SESSION[$key]) ? $_SESSION[$key] : [];
+    $now = time();
+    $authorized = [];
+
+    foreach ($current as $orderId => $row) {
+        $orderId = (int)$orderId;
+        $expiresAt = (int)($row['expires_at'] ?? 0);
+        $outTradeNo = (string)($row['out_trade_no'] ?? '');
+        if ($orderId <= 0 || $expiresAt <= $now || $outTradeNo === '') {
+            continue;
+        }
+        $authorized[$orderId] = [
+            'out_trade_no' => $outTradeNo,
+            'expires_at' => $expiresAt,
+        ];
+    }
+
+    $_SESSION[$key] = $authorized;
+    return $authorized;
+}
+
+function emVisitorAuthorizeOrder($order) {
+    $orderId = (int)($order['id'] ?? 0);
+    $outTradeNo = (string)($order['out_trade_no'] ?? '');
+    if ($orderId <= 0 || $outTradeNo === '') {
+        return;
+    }
+
+    $authorized = emVisitorGetAuthorizedOrders();
+    $authorized[$orderId] = [
+        'out_trade_no' => $outTradeNo,
+        'expires_at' => time() + 3600,
+    ];
+
+    $_SESSION[emVisitorAuthorizedOrderSessionKey()] = $authorized;
+}
+
+function emVisitorAuthorizeOrders($orders) {
+    if (empty($orders) || !is_array($orders)) {
+        return;
+    }
+
+    foreach ($orders as $order) {
+        if (!is_array($order)) {
+            continue;
+        }
+        emVisitorAuthorizeOrder($order);
+    }
+}
+
+function emVisitorLocalToken() {
+    return trim((string)($_COOKIE['EM_LOCAL'] ?? ''));
+}
+
+function emVisitorHasLocalAccess($order) {
+    $local = emVisitorLocalToken();
+    return $local !== ''
+        && !empty($order['em_local'])
+        && hash_equals((string)$order['em_local'], $local);
+}
+
+function emVisitorHasSessionAccess($order) {
+    $orderId = (int)($order['id'] ?? 0);
+    $outTradeNo = (string)($order['out_trade_no'] ?? '');
+    if ($orderId <= 0 || $outTradeNo === '') {
+        return false;
+    }
+
+    $authorized = emVisitorGetAuthorizedOrders();
+    if (empty($authorized[$orderId]['out_trade_no'])) {
+        return false;
+    }
+
+    return hash_equals((string)$authorized[$orderId]['out_trade_no'], $outTradeNo);
+}
+
+function emVisitorAuthRequirement() {
+    $contactEnabled = Option::get('guest_query_contact_switch') != 'n';
+    $passwordEnabled = Option::get('guest_query_password_switch') == 'y';
+
+    return [
+        'contact' => $contactEnabled,
+        'password' => $passwordEnabled,
+    ];
+}
+
+function emVisitorValidateSearchCredentials($contact, $password) {
+    $requirement = emVisitorAuthRequirement();
+
+    if ($requirement['contact'] && $contact === '') {
+        return ['ok' => false, 'msg' => '请输入联系方式'];
+    }
+    if ($requirement['password'] && $password === '') {
+        return ['ok' => false, 'msg' => '请输入订单密码'];
+    }
+
+    return ['ok' => true, 'msg' => 'ok'];
+}
+
+function emVisitorCredentialsMatchOrder($order, $contact, $password) {
+    $requirement = emVisitorAuthRequirement();
+    if (!$requirement['contact'] && !$requirement['password']) {
+        return true;
+    }
+
+    if ($requirement['contact']) {
+        $expected = (string)($order['contact'] ?? '');
+        if ($contact === '' || !hash_equals($expected, $contact)) {
+            return false;
+        }
+    }
+
+    if ($requirement['password']) {
+        $expected = (string)($order['pwd'] ?? '');
+        if ($password === '' || !hash_equals($expected, $password)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function emVisitorCanAccessOrder($order) {
+    return emVisitorHasLocalAccess($order) || emVisitorHasSessionAccess($order);
+}
+
 if (empty($action)) {
     // 获取游客查单配置
     $visitor_required = [];
@@ -65,6 +205,12 @@ if($action == 'visitors_order'){
         emMsg('订单不存在', EM_URL . 'user/visitors.php');
     }
 
+    if (!emVisitorCanAccessOrder($order)) {
+        emMsg('订单不存在或无权查看', EM_URL . 'user/visitors.php');
+    }
+
+    emVisitorAuthorizeOrder($order);
+
     $child_order = $db->once_fetch_array("SELECT * FROM {$prefix}order_list WHERE order_id = {$order['id']} LIMIT 1");
     if (empty($child_order)) {
         emMsg('订单详情不存在', EM_URL . 'user/visitors.php');
@@ -102,17 +248,15 @@ if($action == 'visitors_search_by_info'){
     $guest_query_password_switch = $guest_query_password_switch == 'y' ? 'y' : 'n';
 
     // 验证必填字段
-    if($guest_query_contact_switch == 'y' && empty($contact)){
-        Ret::error('请输入联系方式');
-    }
-
-    if($guest_query_password_switch == 'y' && empty($password)){
-        Ret::error('请输入订单密码');
+    $validation = emVisitorValidateSearchCredentials($contact, $password);
+    if (!$validation['ok']) {
+        Ret::error($validation['msg']);
     }
 
     // 查询订单列表
     $orders = $orderModel->getOrdersByVisitorInfo($contact, $password, $page, 10);
     $total = $orderModel->getOrdersCountByVisitorInfo($contact, $password);
+    emVisitorAuthorizeOrders($orders);
 
     if(empty($orders) && $page == 1){
         Ret::error('未找到匹配的订单，请检查输入信息是否正确');
@@ -130,6 +274,8 @@ if($action == 'visitors_search_by_info'){
 // 根据订单号和游客信息查询订单
 if($action == 'visitors_search_order'){
     $order_no = Input::postStrVar('order_no');
+    $contact = Input::postStrVar('contact');
+    $password = Input::postStrVar('password');
 
     if(empty($order_no)){
         Ret::error('请输入订单编号');
@@ -141,6 +287,18 @@ if($action == 'visitors_search_order'){
     if(empty($order)){
         Ret::error('未找到匹配的订单，请检查站内订单号或支付订单号是否正确');
     }
+
+    $hasLocalAccess = emVisitorHasLocalAccess($order);
+    $hasCredentialAccess = emVisitorCredentialsMatchOrder($order, $contact, $password);
+    if (!$hasLocalAccess && !$hasCredentialAccess) {
+        $validation = emVisitorValidateSearchCredentials($contact, $password);
+        if (!$validation['ok']) {
+            Ret::error($validation['msg']);
+        }
+        Ret::error('未找到匹配的订单，请检查订单编号与下单信息是否正确');
+    }
+
+    emVisitorAuthorizeOrder($order);
 
     // 获取订单详细信息
     $order_list = $orderModel->getOrderList($order['id']);
@@ -210,8 +368,14 @@ if($action == 'visitors_order_list'){
         emMsg('查询信息不能为空');
     }
 
+    $validation = emVisitorValidateSearchCredentials($contact, $password);
+    if (!$validation['ok']) {
+        emMsg($validation['msg']);
+    }
+
     $orders = $orderModel->getOrdersByVisitorInfo($contact, $password, $page, 10);
     $order_count = $orderModel->getOrdersCountByVisitorInfo($contact, $password);
+    emVisitorAuthorizeOrders($orders);
 
     include View::getUserView('_header');
     require_once(View::getUserView('visitors_order'));
@@ -234,12 +398,14 @@ if($action == 'get_local_orders'){
     $local = Input::postStrVar('local');
     $page = Input::postIntVar('page', 1);
 
-    if(empty($local)){
-        Ret::error('本地标识不能为空');
+    $cookieLocal = emVisitorLocalToken();
+    if(empty($local) || $cookieLocal === '' || !hash_equals($cookieLocal, $local)){
+        Ret::error('本地标识无效');
     }
 
-    $orders = $orderModel->getOrdersByLocal($local, $page, 10);
-    $total = $orderModel->getOrdersCountByLocal($local);
+    $orders = $orderModel->getOrdersByLocal($cookieLocal, $page, 10);
+    $total = $orderModel->getOrdersCountByLocal($cookieLocal);
+    emVisitorAuthorizeOrders($orders);
 
     Ret::success('查询成功', [
         'list' => $orders,
@@ -261,20 +427,14 @@ if($action == 'cancel'){
         Ret::error('订单不存在或已失效');
     }
 
-    $authorized = false;
-    $local = isset($_COOKIE['EM_LOCAL']) ? trim((string)$_COOKIE['EM_LOCAL']) : '';
-    if ($local !== '' && !empty($order['em_local']) && hash_equals((string)$order['em_local'], $local)) {
-        $authorized = true;
-    }
+    $authorized = emVisitorCanAccessOrder($order);
 
     if (!$authorized) {
         $contact = Input::postStrVar('contact');
         $password = Input::postStrVar('password');
-        if ($contact !== '' || $password !== '') {
-            $matched = $orderModel->getOrderByVisitorInfo($out_trade_no, $contact, $password);
-            if (!empty($matched)) {
-                $authorized = true;
-            }
+        if (emVisitorCredentialsMatchOrder($order, $contact, $password)) {
+            $authorized = true;
+            emVisitorAuthorizeOrder($order);
         }
     }
 
@@ -282,15 +442,13 @@ if($action == 'cancel'){
         Ret::error('无权取消该订单');
     }
 
-    if (!empty($order['pay_time']) || (int)($order['status'] ?? 0) !== 0) {
+    if (!empty($order['pay_time']) || (int)($order['status'] ?? 0) !== 0 || (int)($order['pay_status'] ?? 0) !== 0) {
         Ret::error('当前订单无法取消');
     }
 
-    $db = Database::getInstance();
-    $db_prefix = DB_PREFIX;
-    $timestamp = time();
-    $db->query("UPDATE {$db_prefix}order SET status = -2, delete_time = {$timestamp}, update_time = {$timestamp} WHERE id = {$order['id']}");
-    $db->query("UPDATE {$db_prefix}order_list SET status = -2 WHERE order_id = {$order['id']}");
+    if (!$orderModel->cancelPendingOrder($order['id'])) {
+        Ret::error('订单状态已变更，请刷新后重试');
+    }
 
     Ret::success('订单已取消');
 }
@@ -300,7 +458,11 @@ if($action == 'sdk'){
     $db = Database::getInstance();
     $db_prefix = DB_PREFIX;
     $out_trade_no = Input::getStrVar('out_trade_no');
-    $order = $db->once_fetch_array("select * from {$db_prefix}order where out_trade_no = '{$out_trade_no}'");
+    $out_trade_no_sql = $db->escape_string($out_trade_no);
+    $order = $db->once_fetch_array("select * from {$db_prefix}order where out_trade_no = '{$out_trade_no_sql}'");
+    if (empty($order) || !emVisitorCanAccessOrder($order)) {
+        emMsg('订单不存在或无权查看', EM_URL . 'user/visitors.php');
+    }
     $child_order = $db->once_fetch_array("select * from {$db_prefix}order_list where order_id = {$order['id']}");
     $goods = $db->once_fetch_array("select * from {$db_prefix}goods where id = {$child_order['goods_id']}");
     doAction('view_order_detail', $db, $db_prefix, $goods, $order, $child_order);

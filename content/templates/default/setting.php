@@ -231,6 +231,7 @@ function plugin_setting_view() {
             selector: 'textarea#home_bulletin',
             language: 'zh_CN',
             height: 320,
+            promotion: false,
             images_upload_handler: example_image_upload_handler,
             plugins: [
                 'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',

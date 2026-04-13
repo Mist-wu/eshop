@@ -211,6 +211,7 @@
             selector: 'textarea#basic-example',
             language: 'zh_CN',
             height: 500,
+            promotion: false,
             plugins: [
                 'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
                 'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',

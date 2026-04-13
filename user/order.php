@@ -54,37 +54,24 @@ if($action == 'index'){
 }
 // 订单列表
 if ($action == 'search') {
-    $tab = 'search';
-    $pwd = Input::getStrVar('pwd');
-    if(empty($pwd)){
-        include View::getUserView('header');
-        require_once View::getUserView('order');
-        include View::getUserView('footer');
-        View::output();
-    }
-    $page = Input::getIntVar('page', 1);
-    $orderNum = $orderModel->getYoukeOrderNum($pwd);
-    $order = $orderModel->getYoukeOrderForHome($page, $pwd);
-    $subPage = '';
-    foreach ($_GET as $key => $val) {
-        $subPage .= $key != 'page' ? "&$key=$val" : '';
-    }
-    $pageurl = pagination($orderNum, Option::get('admin_article_perpage_num'), $page, "order.php?{$subPage}&page=");
-    $GLOBALS['mode_payment'] = [];
-    doAction('mode_payment');
-    if(isset($GLOBALS['mode_payment'][0])){
-        $GLOBALS['mode_payment'][0]['active'] = true;
-    }
-    $mode_payment = $GLOBALS['mode_payment'];
-    include View::getUserView('header');
-    require_once View::getUserView('order');
-    include View::getUserView('footer');
-    View::output();
+    emMsg('请使用游客查单页查询订单', EM_URL . 'user/visitors.php');
 }
 
 if($action == 'download'){
+    loginAuth::checkLogin(NULL, 'user');
+
     $db = Database::getInstance();
     $id = Input::getIntVar('order_list_id'); // 子订单ID
+    $orderList = $db->once_fetch_array(
+        "SELECT ol.id
+         FROM " . DB_PREFIX . "order_list ol
+         INNER JOIN " . DB_PREFIX . "order o ON ol.order_id = o.id
+         WHERE ol.id = {$id} AND o.user_id = " . UID . " AND o.delete_time IS NULL
+         LIMIT 1"
+    );
+    if (empty($orderList)) {
+        emMsg('订单不存在或无权下载', EM_URL . 'user/order.php');
+    }
     $sql = "SELECT * from " . DB_PREFIX . "deliver WHERE order_list_id={$id} order by id asc";
     $res = $db->query($sql);
     $content = "";
@@ -141,13 +128,13 @@ if ($action == 'cancel') {
         emMsg('订单不存在或无权操作', EM_URL . 'user/order.php');
     }
 
-    if (!empty($order['pay_time']) || (int)($order['status'] ?? 0) !== 0) {
+    if (!empty($order['pay_time']) || (int)($order['status'] ?? 0) !== 0 || (int)($order['pay_status'] ?? 0) !== 0) {
         emMsg('当前订单无法取消', EM_URL . 'user/order.php?action=detail&out_trade_no=' . rawurlencode($out_trade_no));
     }
 
-    $timestamp = time();
-    $db->query("UPDATE {$db_prefix}order SET status = -2, delete_time = {$timestamp}, update_time = {$timestamp} WHERE id = {$order['id']}");
-    $db->query("UPDATE {$db_prefix}order_list SET status = -2 WHERE order_id = {$order['id']}");
+    if (!$orderModel->cancelPendingOrder($order['id'])) {
+        emMsg('订单状态已变更，请刷新后重试', EM_URL . 'user/order.php?action=detail&out_trade_no=' . rawurlencode($out_trade_no));
+    }
 
     emMsg('订单已取消', EM_URL . 'user/order.php');
 }

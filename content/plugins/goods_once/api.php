@@ -153,6 +153,12 @@ function manualDeliver() {
     if (empty($order) || empty($child_order) || (int)$child_order['order_id'] !== $order_id) {
         outputJson(1, '订单不存在');
     }
+    if (!empty($order['delete_time']) || (int)($order['status'] ?? 0) === -2) {
+        outputJson(1, '已取消订单不能发货');
+    }
+    if ((int)($order['pay_status'] ?? 0) !== 1 && empty($order['pay_time'])) {
+        outputJson(1, '订单未支付，不能发货');
+    }
 
     $goods = $db->once_fetch_array("SELECT id, type FROM {$db_prefix}goods WHERE id = {$child_order['goods_id']}");
     if (empty($goods) || $goods['type'] !== 'once') {
@@ -172,6 +178,17 @@ function manualDeliver() {
         outputJson(1, '发货内容不能为空');
     }
 
+    $existingRow = $db->once_fetch_array("SELECT COUNT(*) AS total FROM {$db_prefix}stock_usage WHERE order_list_id = {$order_list_id}");
+    $existingCount = (int)($existingRow['total'] ?? 0);
+    $quantity = max(1, (int)($child_order['quantity'] ?? 1));
+    $remaining = $quantity - $existingCount;
+    if ($remaining <= 0) {
+        outputJson(1, '该订单已发货完成');
+    }
+    if (count($lines) > $remaining) {
+        outputJson(1, '发货内容数量超过待发货数量');
+    }
+
     $delivered = 0;
     foreach ($lines as $line) {
         $stock_id = $stockModel->addStock($child_order['goods_id'], $sku_id, $line, 1);
@@ -185,10 +202,13 @@ function manualDeliver() {
         $stockModel->syncSkuStock($child_order['goods_id'], $sku_id, false);
     }
 
-    $db->query("UPDATE {$db_prefix}order SET status = 2 WHERE id = {$order_id}");
-    $db->query("UPDATE {$db_prefix}order_list SET status = 2 WHERE id = {$order_list_id}");
+    $totalDelivered = $existingCount + $delivered;
+    $status = $totalDelivered >= $quantity ? 2 : 1;
 
-    outputJson(0, 'success', ['count' => $delivered]);
+    $db->query("UPDATE {$db_prefix}order SET status = {$status} WHERE id = {$order_id}");
+    $db->query("UPDATE {$db_prefix}order_list SET status = {$status} WHERE id = {$order_list_id}");
+
+    outputJson(0, 'success', ['count' => $delivered, 'status' => $status]);
 }
 
 /**

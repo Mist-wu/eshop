@@ -46,10 +46,23 @@ function manualDeliver() {
     if (empty($order) || empty($child_order) || (int)$child_order['order_id'] !== $order_id) {
         outputJson(1, '订单不存在');
     }
+    if (!empty($order['delete_time']) || (int)($order['status'] ?? 0) === -2) {
+        outputJson(1, '已取消订单不能发货');
+    }
+    if ((int)($order['pay_status'] ?? 0) !== 1 && empty($order['pay_time'])) {
+        outputJson(1, '订单未支付，不能发货');
+    }
 
     $lines = array_filter(array_map('trim', preg_split('/\r?\n/', $content)));
     if (empty($lines)) {
         outputJson(1, '发货内容不能为空');
+    }
+
+    $existingRow = $db->once_fetch_array("SELECT COUNT(*) AS total FROM {$db_prefix}stock_usage WHERE order_list_id = {$order_list_id} AND stock_id = 0");
+    $existingCount = (int)($existingRow['total'] ?? 0);
+    $quantity = max(1, (int)($child_order['quantity'] ?? 1));
+    if ((int)($child_order['status'] ?? 0) === 2 && $existingCount >= $quantity) {
+        outputJson(1, '该订单已发货完成');
     }
 
     $timestamp = time();
@@ -59,8 +72,11 @@ function manualDeliver() {
                     VALUES (0, {$order_id}, {$order_list_id}, '{$safe}', {$timestamp})");
     }
 
-    $db->query("UPDATE {$db_prefix}order SET status = 2 WHERE id = {$order_id}");
-    $db->query("UPDATE {$db_prefix}order_list SET status = 2 WHERE id = {$order_list_id}");
+    $totalDelivered = $existingCount + count($lines);
+    $status = ($quantity > 1 && $totalDelivered < $quantity) ? 1 : 2;
+
+    $db->query("UPDATE {$db_prefix}order SET status = {$status} WHERE id = {$order_id}");
+    $db->query("UPDATE {$db_prefix}order_list SET status = {$status} WHERE id = {$order_list_id}");
 
 
     doAction('after_manual_deliver', [
@@ -69,7 +85,7 @@ function manualDeliver() {
         'content' => $lines
     ]);
 
-    outputJson(0, 'success', ['count' => count($lines)]);
+    outputJson(0, 'success', ['count' => count($lines), 'status' => $status]);
 }
 
 /**

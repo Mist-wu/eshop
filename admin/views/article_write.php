@@ -466,6 +466,7 @@
             selector: 'textarea.basic-example',
             language: 'zh_CN',
             height: 500,
+            promotion: false,
             images_upload_handler: example_image_upload_handler,
             plugins: [
                 'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',

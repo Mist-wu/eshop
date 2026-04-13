@@ -54,10 +54,148 @@ class Order_Model {
         }
 
         $idsStr = implode(',', $orderIds);
+        $this->db->beginTransaction();
+        $this->releaseCouponUsage($orderIds);
         $this->db->query("UPDATE {$this->table} SET status = -2, delete_time = {$timestamp}, update_time = {$timestamp} WHERE id IN ({$idsStr})");
         $this->db->query("UPDATE {$this->db_prefix}order_list SET status = -2 WHERE order_id IN ({$idsStr})");
+        $this->db->commit();
 
         return count($orderIds);
+    }
+
+    private function normalizeOrderIds($orderIds) {
+        if (!is_array($orderIds)) {
+            $orderIds = [$orderIds];
+        }
+
+        $ids = [];
+        foreach ($orderIds as $orderId) {
+            $orderId = (int)$orderId;
+            if ($orderId > 0) {
+                $ids[] = $orderId;
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    public function markOrderPaid($order_id, $data = []) {
+        $order_id = (int)$order_id;
+        if ($order_id <= 0) {
+            return false;
+        }
+
+        if (!isset($data['pay_status'])) {
+            $data['pay_status'] = 1;
+        }
+        if (!isset($data['update_time'])) {
+            $data['update_time'] = time();
+        }
+
+        $Item = [];
+        foreach ($data as $key => $var) {
+            if (is_numeric($var)) {
+                $Item[] = "$key=$var";
+            } else {
+                $var = $this->db->escape_string($var);
+                $Item[] = "$key='$var'";
+            }
+        }
+        $upStr = implode(',', $Item);
+
+        $sql = "UPDATE {$this->table}
+                SET {$upStr}
+                WHERE id = {$order_id}
+                AND delete_time IS NULL
+                AND status = 0
+                AND (pay_time IS NULL OR pay_time = 0 OR pay_time = '')
+                AND (pay_status IS NULL OR pay_status <> 1)";
+        $this->db->query($sql);
+        return $this->db->affected_rows() > 0;
+    }
+
+    public function confirmCouponUsage($order_id) {
+        $order_id = (int)$order_id;
+        if ($order_id <= 0) {
+            return 0;
+        }
+
+        $timestamp = time();
+        $this->db->query("UPDATE {$this->db_prefix}coupon_usage SET status = 1, update_time = {$timestamp} WHERE order_id = {$order_id} AND status = 0");
+        return (int)$this->db->affected_rows();
+    }
+
+    public function releaseCouponUsage($orderIds) {
+        $orderIds = $this->normalizeOrderIds($orderIds);
+        if (empty($orderIds)) {
+            return 0;
+        }
+
+        $idsStr = implode(',', $orderIds);
+        $timestamp = time();
+        $rows = $this->db->fetch_all(
+            "SELECT coupon_id, COUNT(*) AS total
+             FROM {$this->db_prefix}coupon_usage
+             WHERE order_id IN ({$idsStr}) AND status = 0
+             GROUP BY coupon_id"
+        );
+
+        if (empty($rows)) {
+            return 0;
+        }
+
+        $this->db->query("UPDATE {$this->db_prefix}coupon_usage SET status = -1, update_time = {$timestamp} WHERE order_id IN ({$idsStr}) AND status = 0");
+        $released = (int)$this->db->affected_rows();
+        if ($released < 1) {
+            return 0;
+        }
+
+        foreach ($rows as $row) {
+            $couponId = (int)($row['coupon_id'] ?? 0);
+            $total = (int)($row['total'] ?? 0);
+            if ($couponId <= 0 || $total <= 0) {
+                continue;
+            }
+            $this->db->query(
+                "UPDATE {$this->db_prefix}coupon
+                 SET used_times = CASE WHEN used_times >= {$total} THEN used_times - {$total} ELSE 0 END,
+                     update_time = {$timestamp}
+                 WHERE id = {$couponId}"
+            );
+        }
+
+        return $released;
+    }
+
+    public function cancelPendingOrder($order_id) {
+        $order_id = (int)$order_id;
+        if ($order_id <= 0) {
+            return false;
+        }
+
+        $timestamp = time();
+        $this->db->beginTransaction();
+
+        $this->db->query(
+            "UPDATE {$this->table}
+             SET status = -2, delete_time = {$timestamp}, update_time = {$timestamp}
+             WHERE id = {$order_id}
+             AND delete_time IS NULL
+             AND status = 0
+             AND (pay_time IS NULL OR pay_time = 0 OR pay_time = '')
+             AND (pay_status IS NULL OR pay_status = 0)"
+        );
+
+        if ((int)$this->db->affected_rows() < 1) {
+            $this->db->rollback();
+            return false;
+        }
+
+        $this->db->query("UPDATE {$this->db_prefix}order_list SET status = -2 WHERE order_id = {$order_id}");
+        $this->releaseCouponUsage($order_id);
+        $this->db->commit();
+
+        return true;
     }
     
     /**
@@ -456,12 +594,7 @@ sql;
      * 更新订单的支付状态
      */
 	public function updateOrderPayStatus($order_id, $data){
-		$Item = [];
-		foreach ($data as $key => $var) {
-		    $Item[] = "$key=$var";
-		}
-		$upStr = implode(',', $Item);
-		return $this->db->execute("UPDATE $this->table SET $upStr WHERE id = {$order_id}");
+		return $this->markOrderPaid($order_id, $data);
 	}
 
     /**

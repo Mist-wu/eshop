@@ -135,6 +135,7 @@ $(function() {
         language: 'zh_CN',
         height: 500,
         license_key: 'gpl',
+        promotion: false,
         plugins: [
             'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
             'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',

@@ -33,13 +33,20 @@ class Pay_Controller {
 
         if($order['amount'] == 0){
             $order_info = $orderModel->getOrderInfo($out_trade_no);
+            if (empty($order_info)) {
+                emMsg('订单已失效，请重新下单', ISLOGIN ? EM_URL . 'user/order.php' : EM_URL . 'user/visitors.php');
+            }
             $order_update = [
                 'pay_status' => 1,
             ];
-            if ($order_info['pay_status'] != 1) {
-                $orderModel->updateOrderPayStatus($order_info['id'], $order_update);
+            if ((int)($order_info['pay_status'] ?? 0) != 1) {
+                $paid = $orderModel->markOrderPaid($order_info['id'], $order_update);
+                if (!$paid) {
+                    emMsg('订单状态已变更，请刷新后重试', ISLOGIN ? EM_URL . 'user/order.php' : EM_URL . 'user/visitors.php');
+                }
                 $payment_name = empty($order_info['payment']) ? '免费商品' : $order_info['payment'];
                 $orderModel->updateOrderInfo($out_trade_no, ['pay_time' => time(), 'payment' => $payment_name]);
+                $orderModel->confirmCouponUsage($order_info['id']);
                 $orderModel->deliver($order_info['id']);
             }
 
@@ -94,10 +101,16 @@ class Pay_Controller {
                 'pay_status' => 1,
             ];
             $order = $orderModel->getOrderInfo($checkSign['out_trade_no']);
+            if (empty($order)) {
+                Log::warning('同步回调订单不可处理：' . $checkSign['out_trade_no']);
+                emMsg('订单已失效或状态已变更，请联系管理员核实支付结果', ISLOGIN ? EM_URL . 'user/order.php' : EM_URL . 'user/visitors.php');
+            }
             if($order['pay_status'] == 1){
                 $pay_redirect = Option::get('pay_redirect') ? Option::get('pay_redirect') : 'list';
                 if($pay_redirect == 'kami'){
-                    $url = EM_URL . "user/order.php?action=detail&out_trade_no={$order['out_trade_no']}";
+                    $url = ISLOGIN
+                        ? EM_URL . "user/order.php?action=detail&out_trade_no={$order['out_trade_no']}"
+                        : EM_URL . "user/visitors.php?action=visitors_order&out_trade_no={$order['out_trade_no']}";
                 }else{
                     if(ISLOGIN){
                         $url = EM_URL . 'user/order.php';
@@ -108,20 +121,9 @@ class Pay_Controller {
                 header("location: {$url}");
                 die;
             }else{
-                $res = $orderModel->updateOrderPayStatus($order['id'], $order_update); // 修改订单的支付状态
+                $res = $orderModel->markOrderPaid($order['id'], $order_update); // 修改订单的支付状态
                 if($res == false){
-                    $pay_redirect = Option::get('pay_redirect') ? Option::get('pay_redirect') : 'list';
-                    if($pay_redirect == 'kami'){
-                        $url = EM_URL . "user/order.php?action=detail&out_trade_no={$order['out_trade_no']}";
-                    }else{
-                        if(ISLOGIN){
-                            $url = EM_URL . 'user/order.php';
-                        }else{
-                            $url = EM_URL . 'user/visitors.php';
-                        }
-                    }
-                    header("location: {$url}");
-                    die;
+                    emMsg('订单状态已变更，请联系管理员核实支付结果', ISLOGIN ? EM_URL . 'user/order.php' : EM_URL . 'user/visitors.php');
                 }
             }
 
@@ -132,6 +134,7 @@ class Pay_Controller {
                 'pay_time' => $checkSign['timestamp'],
                 'up_no' => $checkSign['up_no']
             ]);
+            $orderModel->confirmCouponUsage($order['id']);
             // 去发货
             Log::info('同步发货');
             $orderModel->deliver($order['id']);
@@ -184,6 +187,10 @@ class Pay_Controller {
             Log::info('异步回调 - 验签通过');
 
             $order_info = $orderModel->getOrderInfo($checkSign['out_trade_no']);
+            if (empty($order_info)) {
+                Log::warning('异步回调订单不可处理：' . $checkSign['out_trade_no']);
+                echo 'success'; die;
+            }
 
             $order_update = [
                 'pay_status' => 1,
@@ -192,9 +199,10 @@ class Pay_Controller {
             if($order_info['pay_status'] == 1){
                 echo 'success'; die; // 重复通知
             }else{
-                $res = $orderModel->updateOrderPayStatus($order_info['id'], $order_update); // 修改订单的支付状态
+                $res = $orderModel->markOrderPaid($order_info['id'], $order_update); // 修改订单的支付状态
                 if($res == false){
-                    echo 'success'; die; // 重复通知
+                    Log::warning('异步回调未能更新支付状态：' . $checkSign['out_trade_no']);
+                    echo 'success'; die; // 重复通知或订单已取消
                 }
             }
 
@@ -203,6 +211,7 @@ class Pay_Controller {
                 'pay_time' => $checkSign['timestamp'],
                 'up_no' => $checkSign['up_no']
             ]);
+            $orderModel->confirmCouponUsage($order_info['id']);
             // 去发货
             Log::info('异步发货');
             $orderModel->deliver($order_info['id']);
@@ -221,16 +230,21 @@ class Pay_Controller {
     public function repay($out_trade_no){
         $orderModel = new Order_Model();
         $order_info = $orderModel->getOrderInfo($out_trade_no);
+        if (empty($order_info)) {
+            Ret::error('订单不存在或已失效');
+        }
 
         $order_update = [
             'pay_status' => 1,
         ];
-        // $res = true;
-        $res = $orderModel->updateOrderPayStatus($order_info['id'], $order_update); // 修改订单的支付状态
+        $res = $orderModel->markOrderPaid($order_info['id'], $order_update); // 修改订单的支付状态
         if(!$res){ // 重复通知
-            emMsg('请勿重复补单，该订单状态为已支付！');
+            emMsg('当前订单无法补单，可能已支付、已取消或已失效');
         }
 
+        $payment_name = empty($order_info['payment']) ? '后台补单' : $order_info['payment'];
+        $orderModel->updateOrderInfo($out_trade_no, ['pay_time' => time(), 'payment' => $payment_name]);
+        $orderModel->confirmCouponUsage($order_info['id']);
         // 去发货
         $res = $orderModel->deliver($order_info['id']);
 

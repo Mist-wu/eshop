@@ -33,6 +33,7 @@ $cancelUrl = ISLOGIN
 
 $isMobile = isMobile();
 $home_icon = Option::get('home_icon');
+$expireTimestamp = (int)($order_info['expire_time'] ?? 0);
 
 ?>
 <!--some html code here-->
@@ -128,6 +129,29 @@ $home_icon = Option::get('home_icon');
             margin-bottom: 20px;
         }
 
+        .payment-status {
+            margin-bottom: 18px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid #d9f7be;
+            background: #f6ffed;
+            color: #389e0d;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .payment-status.is-warning {
+            border-color: #ffd591;
+            background: #fff7e6;
+            color: #d46b08;
+        }
+
+        .payment-status.is-expired {
+            border-color: #ffccc7;
+            background: #fff2f0;
+            color: #cf1322;
+        }
+
         .footer {
             font-size: 12px;
             color: #999;
@@ -208,6 +232,10 @@ $home_icon = Option::get('home_icon');
 
     <p class="instructions">请打开支付宝扫一扫<br>扫描二维码完成支付</p>
 
+    <div class="payment-status" id="payment-status">
+        正在等待支付结果，请在订单有效期内完成支付。
+    </div>
+
     <div class="footer">
         支付完成后，页面将自动跳转到订单页面
     </div>
@@ -230,37 +258,105 @@ $home_icon = Option::get('home_icon');
     });
 
     var out_trade_no = '<?= $order_info['out_trade_no'] ?>';
+    var paymentDeadline = <?= $expireTimestamp ?> * 1000;
+    var paymentStatusEl = document.getElementById('payment-status');
+    var paymentCountdownTimer = null;
+    var paymentCheckTimer = null;
+    var paymentWatchStopped = false;
 
 
+    function padTime(num) {
+        return num < 10 ? '0' + num : String(num);
+    }
+
+    function formatCountdown(totalSeconds) {
+        var minutes = Math.floor(totalSeconds / 60);
+        var seconds = totalSeconds % 60;
+        return padTime(minutes) + ':' + padTime(seconds);
+    }
+
+    function setPaymentStatus(message, state) {
+        if (!paymentStatusEl) {
+            return;
+        }
+        paymentStatusEl.className = 'payment-status';
+        if (state) {
+            paymentStatusEl.classList.add(state);
+        }
+        paymentStatusEl.textContent = message;
+    }
+
+    function updatePaymentStatus() {
+        if (!paymentDeadline) {
+            setPaymentStatus('正在等待支付结果，请在订单有效期内完成支付。');
+            return;
+        }
+
+        var remainingSeconds = Math.max(0, Math.ceil((paymentDeadline - Date.now()) / 1000));
+        if (remainingSeconds === 0) {
+            setPaymentStatus('支付等待时间已超过订单有效期，如未完成支付，请返回订单页重新发起。', 'is-expired');
+            return;
+        }
+
+        if (remainingSeconds <= 60) {
+            setPaymentStatus('支付即将超时，剩余 ' + formatCountdown(remainingSeconds) + '。超时后订单会自动取消。', 'is-warning');
+            return;
+        }
+
+        setPaymentStatus('请在 ' + formatCountdown(remainingSeconds) + ' 内完成支付，支付完成后页面会自动跳转。');
+    }
+
+    function stopPaymentWatch() {
+        paymentWatchStopped = true;
+        if (paymentCountdownTimer) {
+            clearInterval(paymentCountdownTimer);
+            paymentCountdownTimer = null;
+        }
+        if (paymentCheckTimer) {
+            clearTimeout(paymentCheckTimer);
+            paymentCheckTimer = null;
+        }
+    }
+
+    function scheduleNextCheck(delay) {
+        if (paymentWatchStopped) {
+            return;
+        }
+        paymentCheckTimer = setTimeout(function() {
+            checkPay();
+        }, delay);
+    }
+
+    updatePaymentStatus();
+    paymentCountdownTimer = setInterval(updatePaymentStatus, 1000);
 
     function checkPay(){
-        setTimeout(function(){
-            $.ajax({
-                url: "?action=is_pay",
-                type: "POST",
-                data: { out_trade_no: out_trade_no },
-                dataType: "json",
-                success: function(e) {
-                    if(e.data.is_pay){
-                        location.href=e.data.url
-                    }else if(e.data.is_expired){
-                        alert('订单已超时，系统已自动取消');
-                        location.href=e.data.url;
-                    }else{
-                        setTimeout(function(){
-                            checkPay()
-                        }, 5000);
-                    }
-                },
-                error: function(xhr, status, error) {
+        if (paymentWatchStopped) {
+            return;
+        }
+        $.ajax({
+            url: "?action=is_pay",
+            type: "POST",
+            data: { out_trade_no: out_trade_no },
+            dataType: "json",
+            success: function(e) {
+                if(e.data.is_pay){
+                    stopPaymentWatch();
+                    location.href=e.data.url
+                }else if(e.data.is_expired){
+                    stopPaymentWatch();
+                    alert('订单已超时，系统已自动取消');
+                    location.href=e.data.url;
+                }else{
+                    scheduleNextCheck(5000);
                 }
-            });
-        }, 800);
-
+            },
+            error: function() {
+                scheduleNextCheck(5000);
+            }
+        });
     }
-    setTimeout(function(){
-        checkPay();
-    }, 3000);
+    scheduleNextCheck(3000);
 </script>
 
 </body>

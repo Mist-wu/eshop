@@ -514,8 +514,20 @@
                     <div class="form-group">
                         <label for="orderNumber">订单编号</label>
                         <input type="text" name="order_no" placeholder="请输入站内订单号或支付订单号" class="form-control layui-input" required>
-                        <p class="form-hint">支持站内订单号和支付平台订单号；如该订单下单时未填写联系方式，请优先使用此方式</p>
+                        <p class="form-hint">支持站内订单号和支付平台订单号；当前浏览器下过单可直接查询，非当前浏览器请补充下单信息完成校验</p>
                     </div>
+                    <?php if(isset($visitor_required['contact'])): ?>
+                    <div class="form-group">
+                        <label><?= $visitor_required['contact']['title'] ?>（非当前浏览器查询时必填）</label>
+                        <input type="text" name="contact" placeholder="<?= $visitor_required['contact']['placeholder_query'] ?>" class="form-control layui-input">
+                    </div>
+                    <?php endif; ?>
+                    <?php if(isset($visitor_required['password'])): ?>
+                    <div class="form-group">
+                        <label><?= $visitor_required['password']['title'] ?>（非当前浏览器查询时必填）</label>
+                        <input type="text" name="password" placeholder="<?= $visitor_required['password']['placeholder_query'] ?>" class="form-control layui-input">
+                    </div>
+                    <?php endif; ?>
                 </div>
                 <input name="token" value="<?= LoginAuth::genToken() ?>" type="hidden"/>
                 <div class="form-actions">
