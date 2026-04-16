@@ -129,6 +129,41 @@ if($action == 'repay'){
     output::ok();
 }
 
+if ($action == 'reconcile_order') {
+    LoginAuth::checkToken();
+
+    $reference = Input::postStrVar('out_trade_no');
+    $result = $orderModel->reconcileOrderPayment($reference);
+    if (empty($result['ok'])) {
+        Output::error($result['msg'] ?? '查单失败');
+    }
+
+    Output::ok([
+        'msg' => '查单成功，订单状态已同步',
+        'result' => $result,
+    ]);
+}
+
+if ($action == 'reconcile_recent_paid') {
+    LoginAuth::checkToken();
+
+    $limit = Input::postIntVar('limit', 50);
+    $result = $orderModel->reconcileRecentYifutPaidOrders($limit, 0);
+    if (empty($result['ok'])) {
+        Output::error($result['msg'] ?? '最近支付对账失败');
+    }
+
+    $message = "检查 {$result['checked']} 笔，修复 {$result['fixed']} 笔，跳过 {$result['skipped']} 笔，失败 {$result['failed']} 笔";
+    if (!empty($result['messages'])) {
+        $message .= '。' . implode('；', array_slice($result['messages'], 0, 5));
+    }
+
+    Output::ok([
+        'msg' => $message,
+        'result' => $result,
+    ]);
+}
+
 // 删除订单
 if ($action == 'del') {
 

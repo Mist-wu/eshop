@@ -120,7 +120,7 @@ defined('EM_ROOT') || exit('access denied!');
                         <div class="layui-form-item">
                             <label class="layui-form-label">订单号</label>
                             <div class="layui-input-block">
-                                <input type="text" value="" name="out_trade_no" placeholder="请输入订单号" lay-affix="clear" class="layui-input">
+                                <input type="text" value="" name="out_trade_no" placeholder="请输入站内单号/易付通单号/渠道单号" lay-affix="clear" class="layui-input">
                             </div>
                         </div>
                         <div class="layui-form-item">
@@ -181,6 +181,9 @@ defined('EM_ROOT') || exit('access denied!');
             <button id="toolbar-del" class="layui-btn layui-btn-sm layui-btn-red layui-btn-disabled" lay-event="del">
                 <i class="fa fa-trash-o mr-3"></i>删除选中
             </button>
+            <button class="layui-btn layui-btn-sm layui-btn-normal" lay-event="reconcile_recent_paid">
+                <i class="fa fa-random mr-3"></i>同步最近支付
+            </button>
             <button class="layui-btn layui-btn-sm layui-btn-yellow" lay-event="del_unpaid">
                 <i class="fa fa-trash mr-3"></i>删除未支付订单
             </button>
@@ -221,7 +224,15 @@ defined('EM_ROOT') || exit('access denied!');
     </div>
 </script>
 <script type="text/html" id="orderNo">
-    <div class="order-no" style="font-size: 13px;">{{ d.out_trade_no }}</div>
+    <div class="order-no" style="font-size: 13px;">站内：{{ d.out_trade_no }}</div>
+    {{# if(d.trade_no && d.trade_no !== '无'){ }}
+    <div class="order-no" style="font-size: 12px; color: #64748b;">易付通：{{ d.trade_no }}</div>
+    {{# } }}
+    {{# if(d.api_trade_no && d.api_trade_no !== '无'){ }}
+    <div class="order-no" style="font-size: 12px; color: #94a3b8;">渠道：{{ d.api_trade_no }}</div>
+    {{# }else if(d.up_no && d.up_no !== '无'){ }}
+    <div class="order-no" style="font-size: 12px; color: #94a3b8;">支付：{{ d.up_no }}</div>
+    {{# } }}
 </script>
 <script type="text/html" id="amountTpl">
     <div class="order-amount"><span class="currency">¥</span>{{ d.amount }}</div>
@@ -235,6 +246,10 @@ defined('EM_ROOT') || exit('access denied!');
     <span class="order-status is-done">已完成</span>
     {{#  }else if(d.status == -1){ }}
     <span class="order-status is-partial">部分发货</span>
+    {{#  }else if(d.status == -2){ }}
+    <span class="order-status is-unknown">已取消</span>
+    {{#  }else if(d.status == -3){ }}
+    <span class="order-status is-unknown">已过期</span>
     {{#  }else{ }}
     <span class="order-status is-unknown">{{ d.status_text || '未知状态' }}</span>
     {{#  } }}
@@ -258,6 +273,7 @@ defined('EM_ROOT') || exit('access denied!');
         {{# if(d.status == 1){ }}
         <a class="layui-btn layui-btn-sm layui-btn-blue" lay-event="deliver">发货</a>
         {{#  } }}
+        <a class="layui-btn layui-btn-sm layui-btn-normal" lay-event="reconcile">查单</a>
         {{#  if(d.pay_time == ''){ }}
         <a class="layui-btn layui-btn-sm layui-btn-yellow" lay-event="budan">补单</a>
         {{#  } }}
@@ -409,6 +425,34 @@ defined('EM_ROOT') || exit('access denied!');
                         });
                     });
                     break;
+                case 'reconcile_recent_paid':
+                    var reconcileIndex = layer.load(1, {shade: [0.3, '#000']});
+                    $.ajax({
+                        url: '?action=reconcile_recent_paid',
+                        type: 'POST',
+                        dataType: 'json',
+                        data: { token: '<?= LoginAuth::genToken() ?>', limit: 50 },
+                        success: function(e) {
+                            layer.close(reconcileIndex);
+                            if(e.code == 400){
+                                return layer.msg(e.msg);
+                            }
+                            layer.alert(e.data.msg, {
+                                icon: 1,
+                                title: '对账完成',
+                                btn: ['确定'],
+                                yes: function(index) {
+                                    layer.close(index);
+                                    table.reload(id);
+                                }
+                            });
+                        },
+                        error: function(err) {
+                            layer.close(reconcileIndex);
+                            layer.msg(err.responseJSON ? err.responseJSON.msg : '对账失败');
+                        }
+                    });
+                    break;
                 case 'del':
                     var data = checkStatus.data;
                     if(data.length == 0){
@@ -497,6 +541,27 @@ defined('EM_ROOT') || exit('access denied!');
                         }
                     });
                 }, function() {
+                });
+            }
+            if(obj.event === 'reconcile'){
+                var reconcileLoad = layer.load(1, {shade: [0.3, '#000']});
+                $.ajax({
+                    url: '?action=reconcile_order',
+                    type: 'POST',
+                    dataType: 'json',
+                    data: { out_trade_no: data.out_trade_no, token: '<?= LoginAuth::genToken() ?>' },
+                    success: function(e) {
+                        layer.close(reconcileLoad);
+                        if(e.code == 400){
+                            return layer.msg(e.msg);
+                        }
+                        layer.msg(e.data.msg || '查单成功');
+                        table.reload(id);
+                    },
+                    error: function(err) {
+                        layer.close(reconcileLoad);
+                        layer.msg(err.responseJSON ? err.responseJSON.msg : '查单失败');
+                    }
                 });
             }
 
