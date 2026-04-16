@@ -10,7 +10,9 @@ class Pay_Controller {
      */
     function index() {
         $out_trade_no = Input::getStrVar('out_trade_no');
-        if(empty($out_trade_no)) emMsg('非法请求');
+        if (empty($out_trade_no)) {
+            emMsg('非法请求');
+        }
 
         $orderModel = new Order_Model();
         $db = Database::getInstance();
@@ -18,9 +20,11 @@ class Pay_Controller {
 
         $sql = "select * from {$db_prefix}order where out_trade_no = '{$out_trade_no}' and delete_time is null limit 1";
         $order = $db->once_fetch_array($sql);
-        if(empty($order)) emMsg('非法请求');
-        if (isset($order['status']) && (int)$order['status'] === -2) {
-            emMsg('订单已取消，无法继续支付', EM_URL . 'user/order.php');
+        if (empty($order)) {
+            emMsg('非法请求');
+        }
+        if ((int)($order['pay_status'] ?? 0) !== 1 && (int)($order['status'] ?? 0) < 0) {
+            emMsg('订单' . orderStatusText((int)$order['status']) . '，请重新下单', $this->buildPaidRedirectUrl($out_trade_no));
         }
 
         $sql = "select * from {$db_prefix}order_list where order_id={$order['id']}";
@@ -31,272 +35,203 @@ class Pay_Controller {
             emMsg('当前支付方式未启用或未配置，请返回订单页重新选择支付方式');
         }
 
-        if($order['amount'] == 0){
-            $order_info = $orderModel->getOrderInfo($out_trade_no);
+        if ($order['amount'] == 0) {
+            $order_info = $orderModel->getOrderInfo($out_trade_no, true);
             if (empty($order_info)) {
                 emMsg('订单已失效，请重新下单', ISLOGIN ? EM_URL . 'user/order.php' : EM_URL . 'user/visitors.php');
             }
-            $order_update = [
-                'pay_status' => 1,
-            ];
+
             if ((int)($order_info['pay_status'] ?? 0) != 1) {
-                $paid = $orderModel->markOrderPaid($order_info['id'], $order_update);
-                if (!$paid) {
+                $paymentName = empty($order_info['payment']) ? '免费商品' : $order_info['payment'];
+                $result = $orderModel->processConfirmedPayment($out_trade_no, [
+                    'pay_time' => time(),
+                    'payment' => $paymentName,
+                ], ['source' => 'free_order']);
+                if (empty($result['ok'])) {
                     emMsg('订单状态已变更，请刷新后重试', ISLOGIN ? EM_URL . 'user/order.php' : EM_URL . 'user/visitors.php');
                 }
-                $payment_name = empty($order_info['payment']) ? '免费商品' : $order_info['payment'];
-                $orderModel->updateOrderInfo($out_trade_no, ['pay_time' => time(), 'payment' => $payment_name]);
-                $orderModel->confirmCouponUsage($order_info['id']);
-                $orderModel->deliver($order_info['id']);
             }
 
-            $pay_redirect = Option::get('pay_redirect') ? Option::get('pay_redirect') : 'list';
-            if($pay_redirect == 'kami'){
-                $url = ISLOGIN
-                    ? EM_URL . "user/order.php?action=detail&out_trade_no={$out_trade_no}"
-                    : EM_URL . "user/visitors.php?action=visitors_order&out_trade_no={$out_trade_no}";
-            }else{
-                $url = ISLOGIN ? EM_URL . 'user/order.php' : EM_URL . 'user/visitors.php';
-            }
-            header('location: ' . $url);
+            header('location: ' . $this->buildPaidRedirectUrl($out_trade_no));
             die;
-        }else{
-            $pay_func($order, $child_order);
-            die('发起支付中');
         }
-        die('支付发起失败，请刷新当前页面');
-    }
 
+        $pay_func($order, $child_order);
+        die('发起支付中');
+    }
 
     /**
      * 同步通知
      */
-    public function _return(){
-        $orderModel = new Order_Model();
-
+    public function _return() {
         Log::info('同步回调 - 开始');
 
-        $url = $_SERVER['REQUEST_URI'];
-        // 移除查询参数，只保留路径部分
-        $path = parse_url($url, PHP_URL_PATH); // 返回：/action/notify/epay_ali
-        // 按斜杠分割路径
-        $parts = explode('/', trim($path, '/'));
-        // 获取第三个部分（索引为2）
-        $plugin = $parts[2] ?? '';
-        $out_trade_no = empty($parts[3]) ? '' : $parts[3];
-
-        $checkFunc = $plugin . "CheckSign";
-        if (!function_exists($checkFunc)) {
-            Log::warning('同步回调未找到验签函数：' . $checkFunc);
+        $checkSign = $this->resolveCallbackPayload();
+        if (!$checkSign) {
+            Log::info('同步回调 - 验签失败');
             echo '验签失败';
             return;
         }
-        $checkSign = $checkFunc('return');
 
-        if($checkSign){ // 验签通过 - 支付成功
-
-            Log::info('同步回调 - 验签通过');
-
-            $order_update = [
-                'pay_status' => 1,
-            ];
-            $order = $orderModel->getOrderInfo($checkSign['out_trade_no']);
-            if (empty($order)) {
-                Log::warning('同步回调订单不可处理：' . $checkSign['out_trade_no']);
-                emMsg('订单已失效或状态已变更，请联系管理员核实支付结果', ISLOGIN ? EM_URL . 'user/order.php' : EM_URL . 'user/visitors.php');
-            }
-            if($order['pay_status'] == 1){
-                $pay_redirect = Option::get('pay_redirect') ? Option::get('pay_redirect') : 'list';
-                if($pay_redirect == 'kami'){
-                    $url = ISLOGIN
-                        ? EM_URL . "user/order.php?action=detail&out_trade_no={$order['out_trade_no']}"
-                        : EM_URL . "user/visitors.php?action=visitors_order&out_trade_no={$order['out_trade_no']}";
-                }else{
-                    if(ISLOGIN){
-                        $url = EM_URL . 'user/order.php';
-                    }else{
-                        $url = EM_URL . 'user/visitors.php';
-                    }
-                }
-                header("location: {$url}");
-                die;
-            }else{
-                $res = $orderModel->markOrderPaid($order['id'], $order_update); // 修改订单的支付状态
-                if($res == false){
-                    emMsg('订单状态已变更，请联系管理员核实支付结果', ISLOGIN ? EM_URL . 'user/order.php' : EM_URL . 'user/visitors.php');
-                }
-            }
-
-
-
-            // 更新订单的支付时间
-            $orderModel->updateOrderInfo($checkSign['out_trade_no'], [
-                'pay_time' => $checkSign['timestamp'],
-                'up_no' => $checkSign['up_no']
-            ]);
-            $orderModel->confirmCouponUsage($order['id']);
-            // 去发货
-            Log::info('同步发货');
-            $orderModel->deliver($order['id']);
-
-            if(ISLOGIN){
-                header("location: " . EM_URL . 'user/order.php');
-            }else{
-                $url = EM_URL . 'user/visitors.php';
-                header("location: {$url}");
-            }
-
-
-            die;
-
-
-
-        }else{ // 验签失败
-            Log::info("同步回调 - 验签失败");
-            echo '验签失败';
+        Log::info('同步回调 - 验签通过');
+        $result = $this->processPaymentCallback($checkSign, 'return');
+        if (empty($result['ok'])) {
+            Log::warning('同步回调站内处理失败：' . ($checkSign['out_trade_no'] ?? '') . ' - ' . ($result['msg'] ?? 'unknown'));
+            emMsg('支付结果已收到，但站内处理失败，请联系管理员核实订单', $this->buildPaidRedirectUrl((string)($checkSign['out_trade_no'] ?? '')));
         }
+
+        header('location: ' . $this->buildPaidRedirectUrl((string)$checkSign['out_trade_no']));
+        die;
     }
-
-
 
     /**
      * 异步通知
      */
-    public function notify(){
-
+    public function notify() {
         Log::info('异步回调 - 开始');
 
-        $orderModel = new Order_Model();
-
-        $url = $_SERVER['REQUEST_URI'];
-        // 移除查询参数，只保留路径部分
-        $path = parse_url($url, PHP_URL_PATH); // 返回：/action/notify/epay_ali
-        // 按斜杠分割路径
-        $parts = explode('/', trim($path, '/'));
-        // 获取支付插件名称
-        $plugin = $parts[2] ?? '';
-        $checkFunc = $plugin . "CheckSign";
-        if (!function_exists($checkFunc)) {
-            Log::warning('异步回调未找到验签函数：' . $checkFunc);
+        $checkSign = $this->resolveCallbackPayload();
+        if (!$checkSign) {
+            Log::info('异步回调 - 验签失败');
             echo '验签失败';
             return;
         }
-        $checkSign = $checkFunc('notify');
 
-        if($checkSign){ // 验签通过 - 支付成功
-            Log::info('异步回调 - 验签通过');
-
-            $order_info = $orderModel->getOrderInfo($checkSign['out_trade_no']);
-            if (empty($order_info)) {
-                Log::warning('异步回调订单不可处理：' . $checkSign['out_trade_no']);
-                echo 'success'; die;
-            }
-
-            $order_update = [
-                'pay_status' => 1,
-            ];
-
-            if($order_info['pay_status'] == 1){
-                echo 'success'; die; // 重复通知
-            }else{
-                $res = $orderModel->markOrderPaid($order_info['id'], $order_update); // 修改订单的支付状态
-                if($res == false){
-                    Log::warning('异步回调未能更新支付状态：' . $checkSign['out_trade_no']);
-                    echo 'success'; die; // 重复通知或订单已取消
-                }
-            }
-
-            // 更新订单的支付时间
-            $orderModel->updateOrderInfo($checkSign['out_trade_no'], [
-                'pay_time' => $checkSign['timestamp'],
-                'up_no' => $checkSign['up_no']
-            ]);
-            $orderModel->confirmCouponUsage($order_info['id']);
-            // 去发货
-            Log::info('异步发货');
-            $orderModel->deliver($order_info['id']);
-            echo 'success'; die;
-
-        }else{ // 验签失败
-            Log::info("异步回调 - 验签失败");
-            echo '验签失败';
+        Log::info('异步回调 - 验签通过');
+        $result = $this->processPaymentCallback($checkSign, 'notify');
+        if (empty($result['ok'])) {
+            Log::warning('异步回调站内处理失败：' . ($checkSign['out_trade_no'] ?? '') . ' - ' . ($result['msg'] ?? 'unknown'));
         }
 
+        echo 'success';
+        die;
     }
 
     /**
      * 补单
      */
-    public function repay($out_trade_no){
+    public function repay($out_trade_no) {
         $orderModel = new Order_Model();
-        $order_info = $orderModel->getOrderInfo($out_trade_no);
+        $order_info = $orderModel->getOrderInfo($out_trade_no, true);
         if (empty($order_info)) {
             Ret::error('订单不存在或已失效');
         }
 
-        $order_update = [
-            'pay_status' => 1,
-        ];
-        $res = $orderModel->markOrderPaid($order_info['id'], $order_update); // 修改订单的支付状态
-        if(!$res){ // 重复通知
-            emMsg('当前订单无法补单，可能已支付、已取消或已失效');
+        $payment_name = empty($order_info['payment']) ? '后台补单' : $order_info['payment'];
+        $result = $orderModel->processConfirmedPayment($out_trade_no, [
+            'pay_time' => time(),
+            'payment' => $payment_name,
+        ], ['source' => 'admin_repay']);
+
+        if (empty($result['ok'])) {
+            Ret::error($result['msg'] ?? '当前订单无法补单');
         }
 
-        $payment_name = empty($order_info['payment']) ? '后台补单' : $order_info['payment'];
-        $orderModel->updateOrderInfo($out_trade_no, ['pay_time' => time(), 'payment' => $payment_name]);
-        $orderModel->confirmCouponUsage($order_info['id']);
-        // 去发货
-        $res = $orderModel->deliver($order_info['id']);
-
-        Ret::success($res);
-
+        Ret::success($result);
     }
 
     /**
      * 验证订单支付状态
      */
-    public function isPay(){
+    public function isPay() {
         $out_trade_no = Input::postStrVar('out_trade_no');
 
         $orderModel = new Order_Model();
-        $order_info = $orderModel->getOrderInfo($out_trade_no);
+        $order_info = $orderModel->getOrderInfo($out_trade_no, true);
         if (empty($order_info)) {
             $url = ISLOGIN ? EM_URL . 'user/order.php' : EM_URL . 'user/visitors.php';
             die(json_encode([
-                'code' => 200, 'msg' => 'Expired', 'data' => [
+                'code' => 200,
+                'msg' => 'Expired',
+                'data' => [
                     'is_pay' => false,
                     'is_expired' => true,
-                    'url' => $url
-                ]
+                    'url' => $url,
+                ],
             ]));
         }
-        if($order_info['pay_time']){
-            $db = Database::getInstance();
-            $sql = "SELECT * FROM `" . DB_PREFIX . "order_list` WHERE `order_id` = {$order_info['id']} LIMIT 1";
-            $pay_redirect = Option::get('pay_redirect') ? Option::get('pay_redirect') : 'list';
-            if(ISLOGIN){
-                $url = EM_URL . 'user/order.php';
-            }else{
-                $url = EM_URL . 'user/visitors.php';
+
+        if ((int)($order_info['pay_status'] ?? 0) !== 1 && strpos((string)($order_info['pay_plugin'] ?? ''), 'yifut_') === 0) {
+            $reconcile = $orderModel->reconcileOrderPayment($out_trade_no);
+            if (!empty($reconcile['ok'])) {
+                $order_info = $orderModel->getOrderInfo($out_trade_no, true);
             }
+        }
 
-
-
+        if (!empty($order_info['pay_time']) || (int)($order_info['pay_status'] ?? 0) === 1) {
+            $url = ISLOGIN ? EM_URL . 'user/order.php' : EM_URL . 'user/visitors.php';
             die(json_encode([
-                'code' => 200, 'msg' => 'Paid', 'data' => [
+                'code' => 200,
+                'msg' => 'Paid',
+                'data' => [
                     'is_pay' => true,
-                    'url' => $url
-                ]
-            ]));
-        }else{
-            die(json_encode([
-                'code' => 200, 'msg' => 'Unpaid', 'data' => [
-                    'is_pay' => false
-                ]
+                    'url' => $url,
+                ],
             ]));
         }
+
+        if ((int)($order_info['status'] ?? 0) < 0) {
+            $url = ISLOGIN ? EM_URL . 'user/order.php' : EM_URL . 'user/visitors.php';
+            die(json_encode([
+                'code' => 200,
+                'msg' => 'Expired',
+                'data' => [
+                    'is_pay' => false,
+                    'is_expired' => true,
+                    'url' => $url,
+                ],
+            ]));
+        }
+
+        die(json_encode([
+            'code' => 200,
+            'msg' => 'Unpaid',
+            'data' => [
+                'is_pay' => false,
+            ],
+        ]));
     }
 
+    private function resolveCallbackPayload() {
+        $url = $_SERVER['REQUEST_URI'];
+        $path = parse_url($url, PHP_URL_PATH);
+        $parts = explode('/', trim($path, '/'));
+        $plugin = $parts[2] ?? '';
+        $checkFunc = $plugin . 'CheckSign';
+        if (!function_exists($checkFunc)) {
+            Log::warning('支付回调未找到验签函数：' . $checkFunc);
+            return false;
+        }
 
+        return $checkFunc(strpos($path, '/action/return/') !== false ? 'return' : 'notify');
+    }
 
+    private function processPaymentCallback($checkSign, $source) {
+        $orderModel = new Order_Model();
+        $outTradeNo = trim((string)($checkSign['out_trade_no'] ?? ''));
+        $result = $orderModel->processConfirmedPayment($outTradeNo, $checkSign, ['source' => $source]);
+        if (!empty($result['ok'])) {
+            return $result;
+        }
+
+        if ($outTradeNo !== '') {
+            $retry = $orderModel->reconcileOrderPayment($outTradeNo);
+            if (!empty($retry['ok'])) {
+                return $retry;
+            }
+        }
+
+        return $result;
+    }
+
+    private function buildPaidRedirectUrl($outTradeNo) {
+        $pay_redirect = Option::get('pay_redirect') ? Option::get('pay_redirect') : 'list';
+        if ($pay_redirect == 'kami' && $outTradeNo !== '') {
+            return ISLOGIN
+                ? EM_URL . 'user/order.php?action=detail&out_trade_no=' . rawurlencode($outTradeNo)
+                : EM_URL . 'user/visitors.php?action=visitors_order&out_trade_no=' . rawurlencode($outTradeNo);
+        }
+
+        return ISLOGIN ? EM_URL . 'user/order.php' : EM_URL . 'user/visitors.php';
+    }
 }

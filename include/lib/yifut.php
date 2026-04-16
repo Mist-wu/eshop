@@ -68,32 +68,57 @@ function yifutSubmitPayment($payType, $orderInfo, $orderList, $callbackPlugin) {
         emMsg('订单已过期，请重新下单');
     }
 
-    $pid = trim((string)emEnv('EM_YIFUT_PID', ''));
-    $channelId = trim((string)emEnv('EM_YIFUT_CHANNEL_ID', ''));
-    $gateway = trim((string)emEnv('EM_YIFUT_GATEWAY', 'https://www.yifut.com/api/pay/submit'));
     $payload = [
-        'pid' => $pid,
+        'method' => trim((string)emEnv('EM_YIFUT_CREATE_METHOD', 'jump')),
+        'device' => yifutDetermineDevice(),
         'type' => $payType,
         'out_trade_no' => $orderInfo['out_trade_no'],
         'notify_url' => EM_URL . 'action/notify/' . $callbackPlugin,
         'return_url' => EM_URL . 'action/return/' . $callbackPlugin . '/' . rawurlencode($orderInfo['out_trade_no']),
         'name' => yifutBuildOrderName($orderInfo, $orderList),
         'money' => number_format(((float)$orderInfo['amount']) / 100, 2, '.', ''),
+        'clientip' => getClientIP(),
         'param' => $orderInfo['out_trade_no'],
-        'timestamp' => (string)time(),
-        'sign_type' => 'RSA',
     ];
 
-    if ($channelId !== '') {
-        $payload['channel_id'] = $channelId;
+    $response = yifutRequest('/pay/create', $payload);
+    if (!is_array($response) || (int)($response['code'] ?? -1) !== 0) {
+        $message = trim((string)($response['msg'] ?? ''));
+        if ($message === '') {
+            $message = '易付通统一下单失败，请稍后重试';
+        }
+        emMsg($message);
     }
 
-    $payload['sign'] = yifutSign($payload);
-    if ($payload['sign'] === '') {
-        emMsg('易付通支付签名失败，请检查 .env 中的私钥格式');
+    $orderModel = new Order_Model();
+    $tradeSnapshot = yifutBuildPaymentSnapshotFromRemoteOrder($response, $payType, $orderInfo['payment'] ?? '');
+    $persist = [];
+    foreach (['trade_no', 'api_trade_no', 'up_no'] as $field) {
+        if (!empty($tradeSnapshot[$field])) {
+            $persist[$field] = $tradeSnapshot[$field];
+        }
+    }
+    if (!empty($persist)) {
+        $orderModel->updateOrderInfo($orderInfo['out_trade_no'], $persist);
     }
 
-    yifutRenderAutoSubmitForm($gateway, $payload);
+    $payTypeValue = (string)($response['pay_type'] ?? '');
+    $payInfo = (string)($response['pay_info'] ?? '');
+    if ($payInfo === '') {
+        emMsg('易付通返回的支付参数为空，请稍后重试');
+    }
+
+    if ($payTypeValue === 'html') {
+        echo $payInfo;
+        exit;
+    }
+
+    if ($payTypeValue !== '' && $payTypeValue !== 'jump') {
+        Log::warning('易付通统一下单返回非 jump 模式：' . $payTypeValue . '，订单：' . $orderInfo['out_trade_no']);
+    }
+
+    header('location: ' . $payInfo);
+    exit;
 }
 
 function yifutCheckSign($notifyType, $expectedType) {
@@ -101,7 +126,7 @@ function yifutCheckSign($notifyType, $expectedType) {
         return false;
     }
 
-    $params = $_GET;
+    $params = array_merge($_POST ?? [], $_GET ?? []);
     if (empty($params['sign']) || empty($params['out_trade_no'])) {
         return false;
     }
@@ -122,48 +147,74 @@ function yifutCheckSign($notifyType, $expectedType) {
         return false;
     }
 
-    $sign = (string)$params['sign'];
-    unset($params['sign'], $params['sign_type']);
-
-    $signContent = yifutBuildSignContent($params);
-    $publicKey = yifutGetPublicKeyResource();
-    if ($publicKey === false) {
-        Log::warning('易付通平台公钥不可用');
-        return false;
-    }
-
-    $verified = openssl_verify($signContent, base64_decode($sign), $publicKey, OPENSSL_ALGO_SHA256) === 1;
-    if (is_object($publicKey) || is_resource($publicKey)) {
-        openssl_free_key($publicKey);
-    }
-
-    if (!$verified) {
+    if (!yifutVerifyPayloadSignature($params)) {
         Log::warning('易付通回调验签失败');
         return false;
     }
 
     $orderModel = new Order_Model();
-    $order = $orderModel->getOrderInfo($params['out_trade_no']);
-    if (empty($order)) {
-        Log::warning('易付通回调订单不存在：' . $params['out_trade_no']);
-        return false;
+    $order = $orderModel->getOrderInfoRaw((string)$params['out_trade_no'], true);
+    if (!empty($order)) {
+        $orderAmount = number_format(((int)($order['amount'] ?? 0)) / 100, 2, '.', '');
+        if (!isset($params['money']) || emBcComp($orderAmount, (string)$params['money'], 2) !== 0) {
+            Log::warning('易付通回调金额不匹配：' . $params['out_trade_no']);
+            return false;
+        }
+    } else {
+        Log::warning('易付通回调本地订单未命中，将进入异常补偿流程：' . $params['out_trade_no']);
     }
 
-    if (!isset($params['money']) || emBcComp((string)$order['amount'], (string)$params['money'], 2) !== 0) {
-        Log::warning('易付通回调金额不匹配：' . $params['out_trade_no']);
-        return false;
+    $snapshot = yifutBuildPaymentSnapshotFromRemoteOrder($params, (string)($params['type'] ?? ''), !empty($order['payment']) ? (string)$order['payment'] : '');
+    $snapshot['notify_type'] = (string)$notifyType;
+    $snapshot['order_missing'] = empty($order);
+
+    return $snapshot;
+}
+
+function yifutQueryOrder($criteria) {
+    $payload = yifutBuildOrderLookupPayload($criteria);
+    if (empty($payload)) {
+        return [];
     }
 
-    $paidAt = !empty($params['endtime']) ? strtotime($params['endtime']) : (int)($params['timestamp'] ?? time());
-    if ($paidAt <= 0) {
-        $paidAt = time();
+    $response = yifutRequest('/pay/query', $payload);
+    if (!is_array($response) || (int)($response['code'] ?? -1) !== 0) {
+        return [];
     }
 
-    return [
-        'timestamp' => $paidAt,
-        'out_trade_no' => $params['out_trade_no'],
-        'up_no' => $params['api_trade_no'] ?? ($params['trade_no'] ?? ''),
+    return $response;
+}
+
+function yifutCloseOrder($criteria) {
+    $payload = yifutBuildOrderLookupPayload($criteria);
+    if (empty($payload)) {
+        return [];
+    }
+
+    $response = yifutRequest('/pay/close', $payload);
+    if (!is_array($response) || (int)($response['code'] ?? -1) !== 0) {
+        return [];
+    }
+
+    return $response;
+}
+
+function yifutListMerchantOrders($offset = 0, $limit = 50, $status = null) {
+    $limit = max(1, min(50, (int)$limit));
+    $payload = [
+        'offset' => max(0, (int)$offset),
+        'limit' => $limit,
     ];
+    if ($status !== null && $status !== '') {
+        $payload['status'] = (int)$status;
+    }
+
+    $response = yifutRequest('/merchant/orders', $payload);
+    if (!is_array($response) || (int)($response['code'] ?? -1) !== 0) {
+        return [];
+    }
+
+    return $response;
 }
 
 function yifutIsConfigured() {
@@ -217,17 +268,182 @@ function yifutBuildOrderName($orderInfo, $orderList) {
     return substr($title, 0, 120);
 }
 
-function yifutRenderAutoSubmitForm($gateway, $payload) {
-    $gateway = htmlspecialchars($gateway, ENT_QUOTES, 'UTF-8');
-    $html = '<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>跳转支付中</title></head><body>';
-    $html .= '<p style="font-family: sans-serif; padding: 24px; color: #334155;">正在跳转支付页面，请稍候...</p>';
-    $html .= '<form id="yifut-pay-form" action="' . $gateway . '" method="post">';
-    foreach ($payload as $key => $value) {
-        $html .= '<input type="hidden" name="' . htmlspecialchars((string)$key, ENT_QUOTES, 'UTF-8') . '" value="' . htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8') . '">';
+function yifutDetermineDevice($userAgent = null) {
+    $userAgent = strtolower((string)($userAgent !== null ? $userAgent : ($_SERVER['HTTP_USER_AGENT'] ?? '')));
+    if ($userAgent !== '') {
+        if (strpos($userAgent, 'micromessenger') !== false) {
+            return 'wechat';
+        }
+        if (strpos($userAgent, 'qq/') !== false || strpos($userAgent, 'qqbrowser') !== false) {
+            return 'qq';
+        }
+        if (strpos($userAgent, 'alipayclient') !== false) {
+            return 'alipay';
+        }
     }
-    $html .= '</form><script>document.getElementById("yifut-pay-form").submit();</script></body></html>';
-    echo $html;
-    exit;
+
+    return isMobile() ? 'mobile' : 'pc';
+}
+
+function yifutBuildOrderLookupPayload($criteria) {
+    $criteria = is_array($criteria) ? $criteria : [];
+    $payload = [];
+    if (!empty($criteria['trade_no'])) {
+        $payload['trade_no'] = (string)$criteria['trade_no'];
+    } elseif (!empty($criteria['out_trade_no'])) {
+        $payload['out_trade_no'] = (string)$criteria['out_trade_no'];
+    } else {
+        return [];
+    }
+
+    return $payload;
+}
+
+function yifutBuildPaymentSnapshotFromRemoteOrder($data, $payType = '', $fallbackPayment = '') {
+    $data = is_array($data) ? $data : [];
+    $payType = trim((string)($payType !== '' ? $payType : ($data['type'] ?? '')));
+    $payment = trim((string)$fallbackPayment);
+    if ($payment === '') {
+        $payment = yifutPaymentLabel($payType);
+    }
+
+    $paidAt = yifutParsePaidTimestamp($data);
+    $tradeNo = trim((string)($data['trade_no'] ?? ''));
+    $apiTradeNo = trim((string)($data['api_trade_no'] ?? ''));
+    $upNo = $apiTradeNo !== '' ? $apiTradeNo : $tradeNo;
+
+    return [
+        'out_trade_no' => trim((string)($data['out_trade_no'] ?? '')),
+        'trade_no' => $tradeNo,
+        'api_trade_no' => $apiTradeNo,
+        'up_no' => $upNo,
+        'payment' => $payment,
+        'pay_time' => $paidAt,
+        'type' => $payType,
+    ];
+}
+
+function yifutPaymentLabel($payType) {
+    $payType = strtolower(trim((string)$payType));
+    if ($payType === 'wxpay') {
+        return '微信支付';
+    }
+    if ($payType === 'alipay') {
+        return '支付宝';
+    }
+    return '易付通支付';
+}
+
+function yifutParsePaidTimestamp($data) {
+    $data = is_array($data) ? $data : [];
+    $candidates = [
+        $data['endtime'] ?? null,
+        $data['timestamp'] ?? null,
+        $data['addtime'] ?? null,
+    ];
+
+    foreach ($candidates as $value) {
+        if ($value === null || $value === '') {
+            continue;
+        }
+        if (is_numeric($value)) {
+            $timestamp = (int)$value;
+        } else {
+            $timestamp = strtotime((string)$value);
+        }
+        if ($timestamp > 0) {
+            return $timestamp;
+        }
+    }
+
+    return time();
+}
+
+function yifutRequest($path, $payload) {
+    if (!yifutIsConfigured()) {
+        return ['code' => 1, 'msg' => '易付通支付参数未配置完整'];
+    }
+    if (!extension_loaded('openssl')) {
+        return ['code' => 1, 'msg' => '服务器未启用 OpenSSL'];
+    }
+
+    $payload = yifutSignablePayload($payload);
+    if ($payload['sign'] === '') {
+        return ['code' => 1, 'msg' => '易付通请求签名失败'];
+    }
+
+    $url = rtrim(yifutApiBaseUrl(), '/') . '/' . ltrim($path, '/');
+    $responseText = emCurl($url, http_build_query($payload), 1, false, 15);
+    if ($responseText === false || $responseText === '') {
+        return ['code' => 1, 'msg' => '易付通接口请求失败'];
+    }
+
+    $response = json_decode($responseText, true);
+    if (!is_array($response)) {
+        return ['code' => 1, 'msg' => '易付通接口返回格式错误'];
+    }
+
+    if (!empty($response['sign']) && !yifutVerifyPayloadSignature($response)) {
+        Log::warning('易付通接口响应验签失败：' . $path);
+        return ['code' => 1, 'msg' => '易付通接口响应验签失败'];
+    }
+
+    return $response;
+}
+
+function yifutSignablePayload($payload) {
+    $payload = is_array($payload) ? $payload : [];
+    $payload['pid'] = trim((string)emEnv('EM_YIFUT_PID', ''));
+    if (empty($payload['timestamp'])) {
+        $payload['timestamp'] = (string)time();
+    }
+    $payload['sign_type'] = 'RSA';
+
+    if (!isset($payload['channel_id'])) {
+        $channelId = trim((string)emEnv('EM_YIFUT_CHANNEL_ID', ''));
+        if ($channelId !== '') {
+            $payload['channel_id'] = $channelId;
+        }
+    }
+
+    $payload['sign'] = yifutSign($payload);
+
+    return $payload;
+}
+
+function yifutApiBaseUrl() {
+    $configured = trim((string)emEnv('EM_YIFUT_API_BASE', ''));
+    if ($configured !== '') {
+        return rtrim($configured, '/');
+    }
+
+    $legacyGateway = trim((string)emEnv('EM_YIFUT_GATEWAY', ''));
+    if ($legacyGateway !== '' && preg_match('#^(https?://[^/]+)/api/pay/submit#i', $legacyGateway, $matches)) {
+        return rtrim($matches[1], '/') . '/api';
+    }
+
+    return 'https://www.yifut.com/api';
+}
+
+function yifutVerifyPayloadSignature($payload) {
+    $payload = is_array($payload) ? $payload : [];
+    if (empty($payload['sign'])) {
+        return false;
+    }
+
+    $sign = (string)$payload['sign'];
+    $publicKey = yifutGetPublicKeyResource();
+    if ($publicKey === false) {
+        return false;
+    }
+
+    $signContent = yifutBuildSignContent($payload);
+    $verified = openssl_verify($signContent, base64_decode($sign), $publicKey, OPENSSL_ALGO_SHA256) === 1;
+    if (is_object($publicKey) || is_resource($publicKey)) {
+        openssl_free_key($publicKey);
+    }
+
+    return $verified;
 }
 
 function yifutSign($payload) {
