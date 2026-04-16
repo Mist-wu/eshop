@@ -14,6 +14,23 @@ class Api_Controller {
     private $goodsModel;
     private $sortModel;
 
+    private function loadGoodsEmApi($requiredFunctions = []) {
+        $emApiFile = EM_ROOT . '/content/plugins/goods_em/lib/EmApi.php';
+        if (!is_file($emApiFile)) {
+            Ret::error('EM对接功能已下线');
+        }
+
+        if (!class_exists('EmApi')) {
+            require_once $emApiFile;
+        }
+
+        foreach ((array)$requiredFunctions as $function) {
+            if (!function_exists($function)) {
+                Ret::error('EM对接功能已下线');
+            }
+        }
+    }
+
 
     function starter($params) {
         $_func = isset($_GET['rest-api']) ? addslashes($_GET['rest-api']) : '';
@@ -268,13 +285,7 @@ class Api_Controller {
      */
     private function getEmSites(){
         $this->auth();
-        if (!class_exists('EmApi')) {
-            require_once EM_ROOT . '/content/plugins/goods_em/lib/EmApi.php';
-        }
-
-        if (!function_exists('emGetSiteList')) {
-            Ret::error('EM对接插件未启用');
-        }
+        $this->loadGoodsEmApi(['emGetSiteList']);
 
         $sites = emGetSiteList();
         Ret::success('success', $sites);
@@ -292,13 +303,7 @@ class Api_Controller {
             'app_key' => Input::postStrVar('app_key'),
         ];
 
-        if (!class_exists('EmApi')) {
-            require_once EM_ROOT . '/content/plugins/goods_em/lib/EmApi.php';
-        }
-
-        if (!function_exists('emSaveSite')) {
-            Ret::error('EM对接插件未启用');
-        }
+        $this->loadGoodsEmApi(['emSaveSite']);
 
         $result = emSaveSite($post);
         if ($result['success']) {
@@ -315,13 +320,7 @@ class Api_Controller {
         $this->auth();
         $siteId = Input::postIntVar('site_id');
 
-        if (!class_exists('EmApi')) {
-            require_once EM_ROOT . '/content/plugins/goods_em/lib/EmApi.php';
-        }
-
-        if (!function_exists('emDeleteSite')) {
-            Ret::error('EM对接插件未启用');
-        }
+        $this->loadGoodsEmApi(['emDeleteSite']);
 
         $result = emDeleteSite($siteId);
         if ($result) {
@@ -342,9 +341,7 @@ class Api_Controller {
             'app_key' => Input::postStrVar('app_key'),
         ];
 
-        if (!class_exists('EmApi')) {
-            require_once EM_ROOT . '/content/plugins/goods_em/lib/EmApi.php';
-        }
+        $this->loadGoodsEmApi();
 
         $api = new EmApi($post['domain'], $post['app_id'], $post['app_key']);
         $result = $api->connect();
@@ -363,13 +360,7 @@ class Api_Controller {
         $this->auth();
         $siteId = Input::postIntVar('site_id');
 
-        if (!class_exists('EmApi')) {
-            require_once EM_ROOT . '/content/plugins/goods_em/lib/EmApi.php';
-        }
-
-        if (!function_exists('emGetSite')) {
-            Ret::error('EM对接插件未启用');
-        }
+        $this->loadGoodsEmApi(['emGetSite']);
 
         $site = emGetSite($siteId);
         if (!$site) {
@@ -399,13 +390,7 @@ class Api_Controller {
             'raise_value' => floatval($_POST['raise_value'] ?? 10),
         ];
 
-        if (!class_exists('EmApi')) {
-            require_once EM_ROOT . '/content/plugins/goods_em/lib/EmApi.php';
-        }
-
-        if (!function_exists('emImportGoods')) {
-            Ret::error('EM对接插件未启用');
-        }
+        $this->loadGoodsEmApi(['emImportGoods']);
 
         $result = emImportGoods($post);
         Ret::success('导入完成', $result);

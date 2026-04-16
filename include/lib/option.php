@@ -230,7 +230,6 @@ class Option {
             'adm_home/adm_home.php',
             'goods_once/goods_once.php',
             'goods_general/goods_general.php',
-            'goods_service/goods_service.php',
         ];
     }
 
