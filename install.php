@@ -750,8 +750,14 @@ CREATE TABLE `{$db_prefix}order`  (
   `contact` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   `pwd` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   `up_no` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `trade_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '易付通平台订单号',
+  `api_trade_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '微信/支付宝渠道订单号',
   `em_local` varchar(38) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
-  PRIMARY KEY (`id`) USING BTREE
+  PRIMARY KEY (`id`) USING BTREE,
+  INDEX `idx_order_out_trade_no`(`out_trade_no`) USING BTREE,
+  INDEX `idx_order_up_no`(`up_no`) USING BTREE,
+  INDEX `idx_order_trade_no`(`trade_no`) USING BTREE,
+  INDEX `idx_order_api_trade_no`(`api_trade_no`) USING BTREE
 )" . $table_charset_sql . "
 
 DROP TABLE IF EXISTS `{$db_prefix}order_list`;

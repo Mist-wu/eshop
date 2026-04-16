@@ -31,13 +31,15 @@ class Order_Model {
 
         $timestamp = time();
         $rows = $this->db->fetch_all(
-            "SELECT id FROM {$this->table}
+            "SELECT id, out_trade_no, pay_plugin FROM {$this->table}
              WHERE delete_time IS NULL
              AND status = 0
              AND (pay_time IS NULL OR pay_time = 0 OR pay_time = '')
              AND expire_time IS NOT NULL
              AND expire_time > 0
-             AND expire_time <= {$timestamp}"
+             AND expire_time <= {$timestamp}
+             ORDER BY expire_time ASC
+             LIMIT 20"
         );
 
         if (empty($rows)) {
@@ -45,22 +47,61 @@ class Order_Model {
         }
 
         $orderIds = [];
+        $recovered = 0;
         foreach ($rows as $row) {
+            if ($this->tryRecoverExpiredPaidOrder($row)) {
+                $recovered++;
+                continue;
+            }
             $orderIds[] = (int)$row['id'];
         }
         $orderIds = array_filter($orderIds);
-        if (empty($orderIds)) {
-            return 0;
+        if (!empty($orderIds)) {
+            $idsStr = implode(',', $orderIds);
+            $this->db->beginTransaction();
+            $this->releaseCouponUsage($orderIds);
+            $this->db->query("UPDATE {$this->table} SET status = -3, update_time = {$timestamp} WHERE id IN ({$idsStr})");
+            $this->db->query("UPDATE {$this->db_prefix}order_list SET status = -3 WHERE order_id IN ({$idsStr})");
+            $this->db->commit();
         }
 
-        $idsStr = implode(',', $orderIds);
-        $this->db->beginTransaction();
-        $this->releaseCouponUsage($orderIds);
-        $this->db->query("UPDATE {$this->table} SET status = -2, delete_time = {$timestamp}, update_time = {$timestamp} WHERE id IN ({$idsStr})");
-        $this->db->query("UPDATE {$this->db_prefix}order_list SET status = -2 WHERE order_id IN ({$idsStr})");
-        $this->db->commit();
+        return count($orderIds) + $recovered;
+    }
 
-        return count($orderIds);
+    private function tryRecoverExpiredPaidOrder($orderRow) {
+        $orderRow = is_array($orderRow) ? $orderRow : [];
+        if (empty($orderRow['out_trade_no']) || empty($orderRow['pay_plugin'])) {
+            return false;
+        }
+        if (strpos((string)$orderRow['pay_plugin'], 'yifut_') !== 0 || !function_exists('yifutQueryOrder')) {
+            return false;
+        }
+
+        $remoteOrder = yifutQueryOrder(['out_trade_no' => (string)$orderRow['out_trade_no']]);
+        if (empty($remoteOrder)) {
+            if (function_exists('yifutCloseOrder')) {
+                yifutCloseOrder(['out_trade_no' => (string)$orderRow['out_trade_no']]);
+            }
+            return false;
+        }
+
+        if ((int)($remoteOrder['status'] ?? 0) !== 1) {
+            if (function_exists('yifutCloseOrder')) {
+                yifutCloseOrder([
+                    'trade_no' => (string)($remoteOrder['trade_no'] ?? ''),
+                    'out_trade_no' => (string)$orderRow['out_trade_no'],
+                ]);
+            }
+            return false;
+        }
+
+        $paymentData = yifutBuildPaymentSnapshotFromRemoteOrder(
+            $remoteOrder,
+            (string)($remoteOrder['type'] ?? ''),
+            yifutPaymentLabel((string)($remoteOrder['type'] ?? ''))
+        );
+        $result = $this->processConfirmedPayment((string)$orderRow['out_trade_no'], $paymentData, ['source' => 'expire_reconcile']);
+        return !empty($result['ok']);
     }
 
     private function normalizeOrderIds($orderIds) {
@@ -79,7 +120,25 @@ class Order_Model {
         return array_values(array_unique($ids));
     }
 
-    public function markOrderPaid($order_id, $data = []) {
+    private function buildUpdateAssignments($data) {
+        $items = [];
+        foreach ((array)$data as $key => $var) {
+            if ($var === null) {
+                $items[] = "{$key}=NULL";
+            } elseif (is_bool($var)) {
+                $items[] = "{$key}=" . ($var ? 1 : 0);
+            } elseif (is_int($var) || is_float($var)) {
+                $items[] = "{$key}={$var}";
+            } else {
+                $var = $this->db->escape_string((string)$var);
+                $items[] = "{$key}='{$var}'";
+            }
+        }
+
+        return implode(',', $items);
+    }
+
+    public function markOrderPaid($order_id, $data = [], $options = []) {
         $order_id = (int)$order_id;
         if ($order_id <= 0) {
             return false;
@@ -92,24 +151,26 @@ class Order_Model {
             $data['update_time'] = time();
         }
 
-        $Item = [];
-        foreach ($data as $key => $var) {
-            if (is_numeric($var)) {
-                $Item[] = "$key=$var";
-            } else {
-                $var = $this->db->escape_string($var);
-                $Item[] = "$key='$var'";
-            }
+        $upStr = $this->buildUpdateAssignments($data);
+        if ($upStr === '') {
+            return false;
         }
-        $upStr = implode(',', $Item);
 
-        $sql = "UPDATE {$this->table}
-                SET {$upStr}
-                WHERE id = {$order_id}
+        $strictPendingOnly = empty($options['allow_any_unpaid']);
+        $where = "id = {$order_id}";
+        if ($strictPendingOnly) {
+            $where .= "
                 AND delete_time IS NULL
                 AND status = 0
                 AND (pay_time IS NULL OR pay_time = 0 OR pay_time = '')
                 AND (pay_status IS NULL OR pay_status <> 1)";
+        } else {
+            $where .= " AND (pay_status IS NULL OR pay_status <> 1)";
+        }
+
+        $sql = "UPDATE {$this->table}
+                SET {$upStr}
+                WHERE {$where}";
         $this->db->query($sql);
         return $this->db->affected_rows() > 0;
     }
@@ -173,12 +234,17 @@ class Order_Model {
             return false;
         }
 
+        $order = $this->getOrderInfoId($order_id, true);
+        if (empty($order)) {
+            return false;
+        }
+
         $timestamp = time();
         $this->db->beginTransaction();
 
         $this->db->query(
             "UPDATE {$this->table}
-             SET status = -2, delete_time = {$timestamp}, update_time = {$timestamp}
+             SET status = -2, update_time = {$timestamp}
              WHERE id = {$order_id}
              AND delete_time IS NULL
              AND status = 0
@@ -194,6 +260,16 @@ class Order_Model {
         $this->db->query("UPDATE {$this->db_prefix}order_list SET status = -2 WHERE order_id = {$order_id}");
         $this->releaseCouponUsage($order_id);
         $this->db->commit();
+
+        if (strpos((string)($order['pay_plugin'] ?? ''), 'yifut_') === 0 && function_exists('yifutCloseOrder')) {
+            $lookup = [];
+            if (!empty($order['trade_no'])) {
+                $lookup['trade_no'] = (string)$order['trade_no'];
+            } else {
+                $lookup['out_trade_no'] = (string)$order['out_trade_no'];
+            }
+            yifutCloseOrder($lookup);
+        }
 
         return true;
     }
@@ -326,6 +402,11 @@ class Order_Model {
                 $coupon_amount = $origin_amount - $final_amount;
             }
 
+            $expireSeconds = (int)emEnv('EM_ORDER_EXPIRE_SECONDS', 1800);
+            if ($expireSeconds < 300) {
+                $expireSeconds = 300;
+            }
+
             // 创建主订单
             $insert_order = [
                 'client_ip' => getClientIP(),
@@ -339,7 +420,7 @@ class Order_Model {
                 'payment' => $payment_title,
                 'pay_name' => $payment_title,
                 'pay_plugin' => $payment_plugin,
-                'expire_time' => TIMESTAMP + 300,
+                'expire_time' => TIMESTAMP + $expireSeconds,
                 'create_time' => TIMESTAMP,
                 'contact' => $visitor_input['contact'] ?? '',
                 'pwd' => $visitor_input['password'] ?? ''
@@ -442,11 +523,23 @@ class Order_Model {
     /**
      * 通过订单号获取主订单信息
      */
-    public function getOrderInfo($out_trade_no) {
+    public function getOrderInfoRaw($out_trade_no, $includeDeleted = false) {
         $out_trade_no = $this->db->escape_string($out_trade_no);
-        $sql = "SELECT * FROM $this->table WHERE out_trade_no='{$out_trade_no}' AND delete_time IS NULL";
+        $sql = "SELECT * FROM {$this->table} WHERE out_trade_no='{$out_trade_no}'";
+        if (!$includeDeleted) {
+            $sql .= " AND delete_time IS NULL";
+        }
+        $sql .= " LIMIT 1";
         $res = $this->db->query($sql);
         $row = $this->db->fetch_array($res);
+        return empty($row) ? [] : $row;
+    }
+
+    /**
+     * 通过订单号获取主订单信息
+     */
+    public function getOrderInfo($out_trade_no, $includeDeleted = false) {
+        $row = $this->getOrderInfoRaw($out_trade_no, $includeDeleted);
         if (empty($row)) {
             return [];
         }
@@ -457,12 +550,35 @@ class Order_Model {
     /**
      * 通过ID获取主订单信息
      */
-    public function getOrderInfoId($id) {
+    public function getOrderInfoId($id, $includeDeleted = false) {
         $id = (int)$id;
-        $sql = "SELECT * FROM $this->table WHERE id={$id} AND delete_time IS NULL";
+        $sql = "SELECT * FROM {$this->table} WHERE id={$id}";
+        if (!$includeDeleted) {
+            $sql .= " AND delete_time IS NULL";
+        }
+        $sql .= " LIMIT 1";
         $res = $this->db->query($sql);
         $row = $this->db->fetch_array($res);
-        return $row;
+        return empty($row) ? [] : $row;
+    }
+
+    public function getOrderByReference($reference, $includeDeleted = false) {
+        $reference = $this->db->escape_string(trim((string)$reference));
+        if ($reference === '') {
+            return [];
+        }
+
+        $sql = "SELECT * FROM {$this->table}
+                WHERE (out_trade_no = '{$reference}'
+                    OR up_no = '{$reference}'
+                    OR trade_no = '{$reference}'
+                    OR api_trade_no = '{$reference}')";
+        if (!$includeDeleted) {
+            $sql .= " AND delete_time IS NULL";
+        }
+        $sql .= " LIMIT 1";
+
+        return $this->db->once_fetch_array($sql) ?: [];
     }
     /**
      * 获取子订单信息
@@ -486,6 +602,185 @@ sql;
             $data[] = $row;
         }
         return $data;
+    }
+
+    public function processConfirmedPayment($out_trade_no, $paymentData = [], $options = []) {
+        $out_trade_no = trim((string)$out_trade_no);
+        if ($out_trade_no === '') {
+            return ['ok' => false, 'msg' => '订单号不能为空'];
+        }
+
+        $order = $this->getOrderInfoRaw($out_trade_no, true);
+        if (empty($order)) {
+            Log::warning('支付成功处理未找到本地订单：' . $out_trade_no);
+            return ['ok' => false, 'msg' => '订单不存在'];
+        }
+
+        $timestamp = time();
+        $paymentData = is_array($paymentData) ? $paymentData : [];
+        $payTime = isset($paymentData['pay_time']) ? (int)$paymentData['pay_time'] : 0;
+        if ($payTime <= 0) {
+            $payTime = $timestamp;
+        }
+
+        $orderUpdate = [
+            'pay_status' => 1,
+            'pay_time' => $payTime,
+            'payment' => !empty($paymentData['payment']) ? (string)$paymentData['payment'] : (string)($order['payment'] ?? '在线支付'),
+            'trade_no' => $paymentData['trade_no'] ?? ($order['trade_no'] ?? null),
+            'api_trade_no' => $paymentData['api_trade_no'] ?? ($order['api_trade_no'] ?? null),
+            'up_no' => $paymentData['up_no'] ?? ($paymentData['api_trade_no'] ?? ($paymentData['trade_no'] ?? ($order['up_no'] ?? null))),
+            'delete_time' => null,
+            'update_time' => $timestamp,
+        ];
+        if ((int)($order['status'] ?? 0) < 0) {
+            $orderUpdate['status'] = 0;
+        }
+
+        $wasUpdated = false;
+        if ((int)($order['pay_status'] ?? 0) !== 1) {
+            $wasUpdated = $this->markOrderPaid((int)$order['id'], $orderUpdate, ['allow_any_unpaid' => true]);
+            if ($wasUpdated) {
+                $this->confirmCouponUsage((int)$order['id']);
+            }
+        } else {
+            $patch = [
+                'delete_time' => null,
+                'update_time' => $timestamp,
+            ];
+            foreach (['pay_time', 'payment', 'trade_no', 'api_trade_no', 'up_no'] as $field) {
+                if (isset($orderUpdate[$field]) && $orderUpdate[$field] !== null && $orderUpdate[$field] !== '') {
+                    $patch[$field] = $orderUpdate[$field];
+                }
+            }
+            if ((int)($order['status'] ?? 0) < 0) {
+                $patch['status'] = 0;
+            }
+            $this->updateOrderInfoById((int)$order['id'], $patch);
+        }
+
+        $currentOrder = $this->getOrderInfoId((int)$order['id'], true);
+        if (empty($currentOrder)) {
+            return ['ok' => false, 'msg' => '订单更新失败'];
+        }
+
+        $deliverResult = ['code' => 0, 'msg' => 'skipped'];
+        if ((int)($currentOrder['pay_status'] ?? 0) === 1 && (int)($currentOrder['status'] ?? 0) <= 0) {
+            $deliverResult = $this->deliver((int)$currentOrder['id']);
+            if (isset($deliverResult['code']) && (int)$deliverResult['code'] !== 0 && (int)$deliverResult['code'] !== 200) {
+                Log::warning('支付成功后发货失败：' . $out_trade_no . ' - ' . ($deliverResult['msg'] ?? 'unknown'));
+                return ['ok' => false, 'msg' => $deliverResult['msg'] ?? '发货失败', 'order' => $currentOrder, 'deliver' => $deliverResult];
+            }
+        }
+
+        return [
+            'ok' => true,
+            'order' => $this->getOrderInfoId((int)$order['id'], true),
+            'updated' => $wasUpdated,
+            'deliver' => $deliverResult,
+            'source' => $options['source'] ?? '',
+        ];
+    }
+
+    public function reconcileOrderPayment($reference) {
+        $order = $this->getOrderByReference($reference, true);
+        if (empty($order)) {
+            return ['ok' => false, 'msg' => '订单不存在'];
+        }
+
+        if (strpos((string)($order['pay_plugin'] ?? ''), 'yifut_') !== 0 || !function_exists('yifutQueryOrder')) {
+            return ['ok' => false, 'msg' => '当前订单不支持主动查单'];
+        }
+
+        $lookup = [];
+        if (!empty($order['trade_no'])) {
+            $lookup['trade_no'] = (string)$order['trade_no'];
+        } else {
+            $lookup['out_trade_no'] = (string)$order['out_trade_no'];
+        }
+
+        $remoteOrder = yifutQueryOrder($lookup);
+        if (empty($remoteOrder)) {
+            return ['ok' => false, 'msg' => '上游查单失败或订单不存在'];
+        }
+
+        $status = (int)($remoteOrder['status'] ?? -1);
+        if ($status !== 1) {
+            if (!empty($order['expire_time']) && (int)$order['expire_time'] > 0 && (int)$order['expire_time'] <= time() && function_exists('yifutCloseOrder')) {
+                yifutCloseOrder($lookup);
+            }
+            return ['ok' => false, 'msg' => '上游订单尚未支付', 'remote' => $remoteOrder];
+        }
+
+        $paymentData = yifutBuildPaymentSnapshotFromRemoteOrder(
+            $remoteOrder,
+            (string)($remoteOrder['type'] ?? ''),
+            !empty($order['payment']) ? (string)$order['payment'] : ''
+        );
+
+        return $this->processConfirmedPayment((string)$order['out_trade_no'], $paymentData, ['source' => 'manual_query']);
+    }
+
+    public function reconcileRecentYifutPaidOrders($limit = 50, $offset = 0) {
+        if (!function_exists('yifutListMerchantOrders')) {
+            return ['ok' => false, 'msg' => '当前环境不支持对账接口'];
+        }
+
+        $remoteResult = yifutListMerchantOrders($offset, $limit, 1);
+        if (empty($remoteResult) || !isset($remoteResult['data']) || !is_array($remoteResult['data'])) {
+            return ['ok' => false, 'msg' => '最近支付订单拉取失败'];
+        }
+
+        $summary = [
+            'ok' => true,
+            'checked' => 0,
+            'fixed' => 0,
+            'skipped' => 0,
+            'failed' => 0,
+            'messages' => [],
+        ];
+
+        foreach ($remoteResult['data'] as $remoteOrder) {
+            $summary['checked']++;
+            $outTradeNo = trim((string)($remoteOrder['out_trade_no'] ?? ''));
+            if ($outTradeNo === '') {
+                $summary['failed']++;
+                $summary['messages'][] = '存在缺少商户订单号的上游订单';
+                continue;
+            }
+
+            $localOrder = $this->getOrderInfoRaw($outTradeNo, true);
+            if (empty($localOrder)) {
+                $summary['failed']++;
+                $summary['messages'][] = '本地不存在：' . $outTradeNo;
+                continue;
+            }
+
+            $needsFix = (int)($localOrder['pay_status'] ?? 0) !== 1
+                || !empty($localOrder['delete_time'])
+                || empty($localOrder['trade_no'])
+                || empty($localOrder['api_trade_no']);
+
+            if (!$needsFix) {
+                $summary['skipped']++;
+                continue;
+            }
+
+            $paymentData = yifutBuildPaymentSnapshotFromRemoteOrder(
+                $remoteOrder,
+                (string)($remoteOrder['type'] ?? ''),
+                !empty($localOrder['payment']) ? (string)$localOrder['payment'] : ''
+            );
+            $result = $this->processConfirmedPayment($outTradeNo, $paymentData, ['source' => 'recent_reconcile']);
+            if (!empty($result['ok'])) {
+                $summary['fixed']++;
+            } else {
+                $summary['failed']++;
+                $summary['messages'][] = $outTradeNo . '：' . ($result['msg'] ?? '修复失败');
+            }
+        }
+
+        return $summary;
     }
 
     /**
@@ -597,22 +892,30 @@ sql;
 		return $this->markOrderPaid($order_id, $data);
 	}
 
+    public function updateOrderInfoById($order_id, $data) {
+        $order_id = (int)$order_id;
+        if ($order_id <= 0) {
+            return false;
+        }
+
+        $upStr = $this->buildUpdateAssignments($data);
+        if ($upStr === '') {
+            return false;
+        }
+
+        return $this->db->query("UPDATE {$this->table} SET {$upStr} WHERE id = {$order_id}");
+    }
+
     /**
      * 修改主订单
      */
     public function updateOrderInfo($out_trade_no, $data) {
         $out_trade_no = $this->db->escape_string($out_trade_no);
-        $Item = [];
-        foreach ($data as $key => $var) {
-            if (is_numeric($var)) {
-                $Item[] = "$key=$var";
-            } else {
-                $var = $this->db->escape_string($var);
-                $Item[] = "$key='$var'";
-            }
+        $upStr = $this->buildUpdateAssignments($data);
+        if ($upStr === '') {
+            return false;
         }
-        $upStr = implode(',', $Item);
-        return $this->db->query("UPDATE $this->table SET $upStr WHERE out_trade_no = '{$out_trade_no}'");
+        return $this->db->query("UPDATE {$this->table} SET {$upStr} WHERE out_trade_no = '{$out_trade_no}'");
     }
 
 
@@ -630,7 +933,7 @@ sql;
 
         if(!empty($where['out_trade_no'])){
             $out_trade_no = $where['out_trade_no'];
-            $w .= " and (o.out_trade_no like  CONCAT('%', '{$out_trade_no}', '%') or o.up_no like  CONCAT('%', '{$out_trade_no}', '%'))";
+            $w .= " and (o.out_trade_no like  CONCAT('%', '{$out_trade_no}', '%') or o.up_no like  CONCAT('%', '{$out_trade_no}', '%') or o.trade_no like CONCAT('%', '{$out_trade_no}', '%') or o.api_trade_no like CONCAT('%', '{$out_trade_no}', '%'))";
         }
         if(!empty($where['goods_title'])){
             $goods_title = $where['goods_title'];
@@ -684,7 +987,7 @@ sql;
 
         if(!empty($where['out_trade_no'])){
             $out_trade_no = $where['out_trade_no'];
-            $w .= " and (o.out_trade_no like  CONCAT('%', '{$out_trade_no}', '%') or o.up_no like  CONCAT('%', '{$out_trade_no}', '%'))";
+            $w .= " and (o.out_trade_no like  CONCAT('%', '{$out_trade_no}', '%') or o.up_no like  CONCAT('%', '{$out_trade_no}', '%') or o.trade_no like CONCAT('%', '{$out_trade_no}', '%') or o.api_trade_no like CONCAT('%', '{$out_trade_no}', '%'))";
         }
         if(!empty($where['goods_title'])){
             $goods_title = $where['goods_title'];
@@ -739,7 +1042,7 @@ sql;
 
         if(!empty($where['out_trade_no'])){
             $out_trade_no = $where['out_trade_no'];
-            $w .= " and (o.out_trade_no like  CONCAT('%', '{$out_trade_no}', '%') or o.up_no like  CONCAT('%', '{$out_trade_no}', '%'))";
+            $w .= " and (o.out_trade_no like  CONCAT('%', '{$out_trade_no}', '%') or o.up_no like  CONCAT('%', '{$out_trade_no}', '%') or o.trade_no like CONCAT('%', '{$out_trade_no}', '%') or o.api_trade_no like CONCAT('%', '{$out_trade_no}', '%'))";
         }
         if(!empty($where['goods_title'])){
             $goods_title = $where['goods_title'];
@@ -795,6 +1098,8 @@ sql;
             $row['pwd'] = empty($row['pwd']) ? '无' : $row['pwd'];
             $row['tel'] = empty($row['tel']) ? '无' : $row['tel'];
             $row['up_no'] = empty($row['up_no']) ? '无' : $row['up_no'];
+            $row['trade_no'] = empty($row['trade_no']) ? '无' : $row['trade_no'];
+            $row['api_trade_no'] = empty($row['api_trade_no']) ? '无' : $row['api_trade_no'];
             $row['user_nickname'] = $row['user_id'] == 0 ? '游客身份' : $row['user_nickname'];
             
 
@@ -932,15 +1237,7 @@ sql;
      * 根据订单号查询订单
      */
     public function getOrderByOrderNo($order_no, $includeDeleted = false) {
-        $order_no = $this->db->escape_string($order_no);
-        $where = "(out_trade_no = '{$order_no}' OR up_no = '{$order_no}')";
-        if (!$includeDeleted) {
-            $where .= " AND delete_time IS NULL";
-        }
-        $sql = "SELECT * FROM {$this->table} WHERE {$where} LIMIT 1";
-        $order = $this->db->once_fetch_array($sql);
-
-        return $order;
+        return $this->getOrderByReference($order_no, $includeDeleted);
     }
 
     /**
@@ -951,7 +1248,7 @@ sql;
         $contact = $this->db->escape_string($contact);
         $password = $this->db->escape_string($password);
 
-        $conditions = ["(out_trade_no = '{$order_no}' OR up_no = '{$order_no}')"];
+        $conditions = ["(out_trade_no = '{$order_no}' OR up_no = '{$order_no}' OR trade_no = '{$order_no}' OR api_trade_no = '{$order_no}')"];
 
         if (!empty($contact)) {
             $conditions[] = "contact = '{$contact}'";
@@ -999,7 +1296,7 @@ sql;
         $prefix = DB_PREFIX;
 
         $sql = "SELECT DISTINCT o.id, ol.goods_id, g.type,
-                o.out_trade_no, o.up_no, g.title, o.create_time, o.pay_time, o.status, o.amount, ol.quantity, ol.attr_spec, ol.sku,
+                o.out_trade_no, o.up_no, o.trade_no, o.api_trade_no, g.title, o.create_time, o.pay_time, o.status, o.amount, ol.quantity, ol.attr_spec, ol.sku,
                 ol.attach_user, ol.unit_price, ol.cost_price, o.payment, g.cover
                 FROM {$prefix}order o
                 INNER JOIN {$prefix}order_list ol ON o.id = ol.order_id
@@ -1061,7 +1358,7 @@ sql;
      */
     public function getYoukeOrderCount($pwd) {
         $prefix = DB_PREFIX;
-        $sql = "SELECT count(o.id) AS total FROM $this->table as o LEFT JOIN {$prefix}order_list as ol on o.id=ol.order_id where delete_time is null and (contact = '{$pwd}' or up_no='{$pwd}' or out_trade_no='{$pwd}' or ol.attach_user LIKE '%:\"{$pwd}\"%')";
+        $sql = "SELECT count(o.id) AS total FROM $this->table as o LEFT JOIN {$prefix}order_list as ol on o.id=ol.order_id where delete_time is null and (contact = '{$pwd}' or up_no='{$pwd}' or out_trade_no='{$pwd}' or trade_no='{$pwd}' or api_trade_no='{$pwd}' or ol.attach_user LIKE '%:\"{$pwd}\"%')";
         $data = $this->db->once_fetch_array($sql);
         return empty($data['total']) ? 0 : $data['total'];
     }
@@ -1086,13 +1383,13 @@ sql;
         $keyword = $this->db->escape_string($keyword);
 
         $sql = "SELECT DISTINCT o.id, ol.goods_id, g.type, 
-                o.out_trade_no, o.up_no, g.title, o.create_time, o.pay_time, o.status, o.amount, ol.quantity, ol.attr_spec, ol.sku, 
+                o.out_trade_no, o.up_no, o.trade_no, o.api_trade_no, g.title, o.create_time, o.pay_time, o.status, o.amount, ol.quantity, ol.attr_spec, ol.sku, 
                 ol.attach_user, ol.unit_price, ol.cost_price, o.payment, g.cover 
                 FROM {$prefix}order o 
                 INNER JOIN {$prefix}order_list ol ON o.id = ol.order_id 
                 LEFT JOIN {$prefix}goods g on ol.goods_id = g.id 
                 WHERE o.delete_time is null 
-                AND (o.contact = '{$keyword}' OR o.up_no = '{$keyword}' OR o.out_trade_no = '{$keyword}' OR ol.attach_user LIKE '%:\"{$keyword}\"%')
+                AND (o.contact = '{$keyword}' OR o.up_no = '{$keyword}' OR o.out_trade_no = '{$keyword}' OR o.trade_no = '{$keyword}' OR o.api_trade_no = '{$keyword}' OR ol.attach_user LIKE '%:\"{$keyword}\"%')
                 ORDER BY o.id DESC LIMIT {$offset}, {$pageNum}";
 
         $res = $this->db->fetch_all($sql);
@@ -1133,7 +1430,7 @@ sql;
         // 添加搜索条件
         if ($search !== null && trim($search) !== '') {
             $search = $this->db->escape_string(trim($search));
-            $conditions[] = "(o.out_trade_no LIKE '%{$search}%' OR g.title LIKE '%{$search}%')";
+            $conditions[] = "(o.out_trade_no LIKE '%{$search}%' OR o.up_no LIKE '%{$search}%' OR o.trade_no LIKE '%{$search}%' OR o.api_trade_no LIKE '%{$search}%' OR g.title LIKE '%{$search}%')";
         }
         
         if (!empty($conditions)) {
@@ -1153,7 +1450,7 @@ sql;
         
         // 基础查询
         $sql = "SELECT DISTINCT o.id, ol.goods_id, g.type, 
-                o.out_trade_no, o.up_no, g.title, o.create_time, o.pay_time, o.status, o.amount, ol.quantity, ol.attr_spec, ol.sku, 
+                o.out_trade_no, o.up_no, o.trade_no, o.api_trade_no, g.title, o.create_time, o.pay_time, o.status, o.amount, ol.quantity, ol.attr_spec, ol.sku, 
                 ol.attach_user, ol.unit_price, ol.cost_price, o.payment, g.cover 
                 FROM {$prefix}order o 
                 INNER JOIN {$prefix}order_list ol ON o.id = ol.order_id 
@@ -1169,7 +1466,7 @@ sql;
         // 添加搜索条件
         if ($search !== null && trim($search) !== '') {
             $search = $this->db->escape_string(trim($search));
-            $conditions[] = "(o.out_trade_no LIKE '%{$search}%' OR g.title LIKE '%{$search}%')";
+            $conditions[] = "(o.out_trade_no LIKE '%{$search}%' OR o.up_no LIKE '%{$search}%' OR o.trade_no LIKE '%{$search}%' OR o.api_trade_no LIKE '%{$search}%' OR g.title LIKE '%{$search}%')";
         }
         
         if (!empty($conditions)) {
@@ -1268,7 +1565,7 @@ sql;
         $prefix = DB_PREFIX;
 
         $sql = "SELECT DISTINCT o.id, ol.goods_id, g.type,
-                o.out_trade_no, o.up_no, g.title, o.create_time, o.pay_time, o.status, o.amount, ol.quantity, ol.attr_spec, ol.sku,
+                o.out_trade_no, o.up_no, o.trade_no, o.api_trade_no, g.title, o.create_time, o.pay_time, o.status, o.amount, ol.quantity, ol.attr_spec, ol.sku,
                 ol.attach_user, ol.unit_price, ol.cost_price, o.payment, g.cover
                 FROM {$prefix}order o
                 INNER JOIN {$prefix}order_list ol ON o.id = ol.order_id

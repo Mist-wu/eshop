@@ -170,7 +170,27 @@ function orderStatusText($status){
     if($status == 2) $text = '已完成';
     if($status == -1) $text = '部分发货';
     if($status == -2) $text = '已取消';
+    if($status == -3) $text = '已过期';
     return $text;
+}
+
+function orderPaymentReferenceList($order) {
+    $order = is_array($order) ? $order : [];
+    $refs = [];
+
+    if (!empty($order['out_trade_no'])) {
+        $refs['站内订单号'] = (string)$order['out_trade_no'];
+    }
+    if (!empty($order['trade_no'])) {
+        $refs['易付通订单号'] = (string)$order['trade_no'];
+    }
+    if (!empty($order['api_trade_no'])) {
+        $refs['渠道订单号'] = (string)$order['api_trade_no'];
+    } elseif (!empty($order['up_no']) && (($order['trade_no'] ?? '') !== ($order['up_no'] ?? ''))) {
+        $refs['支付单号'] = (string)$order['up_no'];
+    }
+
+    return $refs;
 }
 
 function goodsTypeText($goods_type){
