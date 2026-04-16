@@ -25,7 +25,7 @@ if (empty($order_info)) {
 
 $detailUrl = ISLOGIN
     ? EM_URL . 'user/order.php?action=detail&out_trade_no=' . rawurlencode($order_info['out_trade_no'])
-    : EM_URL . 'user/visitors.php';
+    : EM_URL . 'user/visitors.php?action=visitors_order&out_trade_no=' . rawurlencode($order_info['out_trade_no']);
 $cancelUrl = ISLOGIN
     ? EM_URL . 'user/order.php?action=cancel&out_trade_no=' . rawurlencode($order_info['out_trade_no'])
     : '';

@@ -111,12 +111,12 @@
             </div>
 
             <div class="layui-form-item">
-                <label class="layui-form-label">购买后跳转页面</label>
+                <label class="layui-form-label">支付成功后跳转</label>
                 <div class="layui-input-block">
-                    <input type="radio" name="pay_redirect" value="list" title="订单列表" <?= $pay_redirect == 'list' ? 'checked' : '' ?>>
+                    <input type="radio" name="pay_redirect" value="kami" title="订单详情页" <?= $pay_redirect == 'kami' ? 'checked' : '' ?>>
                 </div>
                 <div class="layui-input-block">
-                    <input type="radio" name="pay_redirect" value="kami" title="卡密详情页(非卡密类商品不生效)" <?= $pay_redirect == 'kami' ? 'checked' : '' ?>>
+                    <input type="radio" name="pay_redirect" value="list" title="订单列表" <?= $pay_redirect == 'list' ? 'checked' : '' ?>>
                 </div>
             </div>
 

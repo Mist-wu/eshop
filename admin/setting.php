@@ -160,7 +160,7 @@ if ($action == 'index') {
     $order_email_switch = empty($order_email_switch) ? 'y' : $order_email_switch;
     $order_pwd_switch = empty($order_pwd_switch) ? 'y' : $order_pwd_switch;
     $order_tel_switch = empty($order_tel_switch) ? 'y' : $order_tel_switch;
-    $pay_redirect = empty($pay_redirect) ? 'list' : $pay_redirect;
+    $pay_redirect = empty($pay_redirect) ? 'kami' : $pay_redirect;
 
 
 
@@ -182,7 +182,7 @@ if ($action == 'index_save') {
         'order_email_switch' => Input::postStrVar('order_email_switch', 'n'),
         'order_pwd_switch' => Input::postStrVar('order_pwd_switch', 'n'),
         'order_tel_switch' => Input::postStrVar('order_tel_switch', 'n'),
-        'pay_redirect' => Input::postStrVar('pay_redirect', 'list'),
+        'pay_redirect' => Input::postStrVar('pay_redirect', 'kami'),
     ];
 
     foreach ($getData as $key => $val) {
@@ -498,7 +498,7 @@ if ($action == 'shop') {
     $options_cache = $CACHE->readCache('options');
     extract($options_cache);
     $coupon_switch = empty($coupon_switch) ? 'y' : $coupon_switch;
-    $pay_redirect = empty($pay_redirect) ? 'list' : $pay_redirect;
+    $pay_redirect = empty($pay_redirect) ? 'kami' : $pay_redirect;
 
     // 游客查单模式配置 - 设置默认值
     $guest_query_contact_switch = $guest_query_contact_switch ?? 'y'; // 默认开启
@@ -531,7 +531,7 @@ if ($action == 'shop_save') {
 
     $getData = [
         'coupon_switch' => Input::postStrVar('coupon_switch', 'n'),
-        'pay_redirect' => Input::postStrVar('pay_redirect', 'list'),
+        'pay_redirect' => Input::postStrVar('pay_redirect', 'kami'),
         // 游客查单模式配置
         'guest_query_contact_switch' => $contactSwitch,
         'guest_query_contact_type' => $_config['guest_query_contact_type'] ?? 'any',

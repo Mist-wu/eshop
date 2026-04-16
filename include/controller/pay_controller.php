@@ -165,7 +165,7 @@ class Pay_Controller {
         }
 
         if (!empty($order_info['pay_time']) || (int)($order_info['pay_status'] ?? 0) === 1) {
-            $url = ISLOGIN ? EM_URL . 'user/order.php' : EM_URL . 'user/visitors.php';
+            $url = $this->buildPaidRedirectUrl($out_trade_no);
             die(json_encode([
                 'code' => 200,
                 'msg' => 'Paid',
@@ -231,14 +231,88 @@ class Pay_Controller {
     }
 
     private function buildPaidRedirectUrl($outTradeNo) {
-        $pay_redirect = Option::get('pay_redirect') ? Option::get('pay_redirect') : 'list';
-        if ($pay_redirect == 'kami' && $outTradeNo !== '') {
-            return ISLOGIN
-                ? EM_URL . 'user/order.php?action=detail&out_trade_no=' . rawurlencode($outTradeNo)
-                : EM_URL . 'user/visitors.php?action=visitors_order&out_trade_no=' . rawurlencode($outTradeNo);
+        $pay_redirect = Option::get('pay_redirect') ? Option::get('pay_redirect') : 'kami';
+        if ($pay_redirect !== 'list' && $outTradeNo !== '') {
+            $detailUrl = $this->buildOrderDetailRedirectUrl($outTradeNo);
+            if ($detailUrl !== '') {
+                return $detailUrl;
+            }
         }
 
+        return $this->buildOrderListRedirectUrl();
+    }
+
+    private function buildOrderDetailRedirectUrl($outTradeNo) {
+        if ($outTradeNo === '') {
+            return '';
+        }
+
+        if (ISLOGIN) {
+            return EM_URL . 'user/order.php?action=detail&out_trade_no=' . rawurlencode($outTradeNo);
+        }
+
+        $order = $this->createOrderModel()->getOrderByOrderNo($outTradeNo, true);
+        if (empty($order) || !$this->canVisitorAccessOrderDetail($order)) {
+            return '';
+        }
+
+        return EM_URL . 'user/visitors.php?action=visitors_order&out_trade_no=' . rawurlencode($outTradeNo);
+    }
+
+    private function buildOrderListRedirectUrl() {
         return ISLOGIN ? EM_URL . 'user/order.php' : EM_URL . 'user/visitors.php';
+    }
+
+    private function canVisitorAccessOrderDetail($order) {
+        $orderId = (int)($order['id'] ?? 0);
+        $outTradeNo = (string)($order['out_trade_no'] ?? '');
+        if ($orderId <= 0 || $outTradeNo === '') {
+            return false;
+        }
+
+        $localToken = trim((string)($_COOKIE['EM_LOCAL'] ?? ''));
+        if ($localToken !== '' && !empty($order['em_local']) && hash_equals((string)$order['em_local'], $localToken)) {
+            return true;
+        }
+
+        $authorized = $this->getAuthorizedVisitorOrders();
+        if (empty($authorized[$orderId]['out_trade_no'])) {
+            return false;
+        }
+
+        return hash_equals((string)$authorized[$orderId]['out_trade_no'], $outTradeNo);
+    }
+
+    private function getAuthorizedVisitorOrders() {
+        $this->ensureVisitorSession();
+
+        $key = 'emshop_visitor_authorized_orders';
+        $current = isset($_SESSION[$key]) && is_array($_SESSION[$key]) ? $_SESSION[$key] : [];
+        $now = time();
+        $authorized = [];
+
+        foreach ($current as $orderId => $row) {
+            $orderId = (int)$orderId;
+            $expiresAt = (int)($row['expires_at'] ?? 0);
+            $outTradeNo = (string)($row['out_trade_no'] ?? '');
+            if ($orderId <= 0 || $expiresAt <= $now || $outTradeNo === '') {
+                continue;
+            }
+
+            $authorized[$orderId] = [
+                'out_trade_no' => $outTradeNo,
+                'expires_at' => $expiresAt,
+            ];
+        }
+
+        $_SESSION[$key] = $authorized;
+        return $authorized;
+    }
+
+    private function ensureVisitorSession() {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            @session_start();
+        }
     }
 
     protected function createOrderModel() {

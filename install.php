@@ -699,7 +699,7 @@ INSERT INTO {$db_prefix}options (option_name, option_value) VALUES
 ('order_email_switch','n'),
 ('order_pwd_switch','y'),
 ('order_tel_switch','n'),
-('pay_redirect','list'),
+('pay_redirect','kami'),
 ('login_switch','y'),
 ('register_switch','y'),
 ('balance_switch','y'),

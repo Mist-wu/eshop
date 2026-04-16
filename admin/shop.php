@@ -29,7 +29,7 @@ if ($action == 'index_save') {
         'order_email_switch' => Input::postStrVar('order_email_switch', 'n'),
         'order_pwd_switch' => Input::postStrVar('order_pwd_switch', 'n'),
         'order_tel_switch' => Input::postStrVar('order_tel_switch', 'n'),
-        'pay_redirect' => Input::postStrVar('pay_redirect', 'list'),
+        'pay_redirect' => Input::postStrVar('pay_redirect', 'kami'),
         'visitor_required_global_switch' => Input::postStrVar('visitor_required_global_switch', 'n'),
         'visitor_required_global' => $_config['visitor_required'] ?? 'any',
         'visitor_required_global_placeholder' => $_config['visitor_required_placeholder'] ?? '',
@@ -49,7 +49,7 @@ if ($action == 'index') {
     $order_email_switch = empty($order_email_switch) ? 'y' : $order_email_switch;
     $order_pwd_switch = empty($order_pwd_switch) ? 'y' : $order_pwd_switch;
     $order_tel_switch = empty($order_tel_switch) ? 'y' : $order_tel_switch;
-    $pay_redirect = empty($pay_redirect) ? 'list' : $pay_redirect;
+    $pay_redirect = empty($pay_redirect) ? 'kami' : $pay_redirect;
 
     $br = '<ol class="breadcrumb">
         <li class="breadcrumb-item"><a href="./">控制台</a></li>
