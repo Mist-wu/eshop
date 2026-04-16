@@ -2,3 +2,5 @@
 
 require_once 'globals.php';
 
+emDirect('./');
+

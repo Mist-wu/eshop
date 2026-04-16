@@ -117,7 +117,7 @@ defined('EM_ROOT') || exit('access denied!');
 <div class="template-page">
     <div class="template-toolbar">
         <div class="template-toolbar-left">
-            <button type="button" class="layui-btn layui-btn-sm layui-btn" id="btn-store">应用商店</button>
+            <span class="template-count">仅保留本地模板管理</span>
         </div>
         <div class="template-toolbar-right">
             <span class="template-count">共 <strong id="template-count">0</strong> 个模板</span>
@@ -172,10 +172,6 @@ defined('EM_ROOT') || exit('access denied!');
         var table = layui.table;
         var form = layui.form;
         var $ = layui.$;
-
-        $('#btn-store').on('click', function(){
-            location.href = 'store.php';
-        });
         // 创建渲染实例
         window.table = table.render({
             elem: '#index',

@@ -329,7 +329,7 @@ $qtyDiscountConfig = $goodsConfig['qty_discount'] ?? [];
                 <div class="custom-tab-pane active" id="tab1">
                     <div class="layui-form-item">
                         <label class="layui-form-label">
-                            商品类型<?php if($action != 'edit' || ($goods['group_id'] ?? 0) != -1): ?><a href="store.php?action=plu&plugin_type=7&title=商品类型扩展" style="margin-left: 20px; color: #1e9fff;">+ 添加更多类型</a><?php endif; ?>
+                            商品类型
                         </label>
                         <?php if($action == 'edit'): ?>
                             <input type="hidden" name="type" value="<?= $goods['type'] ?>" />
@@ -357,7 +357,7 @@ $qtyDiscountConfig = $goodsConfig['qty_discount'] ?? [];
                             <?php endforeach; ?>
                             <?php if(empty($goods['goods_type_all'])): ?>
                             <span class="form-tips">
-                                未启用任何商品类型插件，请前往<a href="plugin.php" style="color: #1e9fff;">插件管理菜单</a>启用插件或<a href="store.php?action=plu&plugin_type=7&title=商品类型扩展" style="color: #1e9fff;">前往应用市场</a>安装更多商品类型插件
+                                当前站点未启用任何商品类型扩展，请先恢复对应模块后再配置更多类型
                             </span>
                             <?php endif; ?>
                             <?php endif; ?>
