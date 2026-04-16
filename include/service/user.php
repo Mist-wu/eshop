@@ -105,13 +105,17 @@ class User {
         return true;
     }
 
-    static function checkMailCode($mail_code) {
+    static function checkMailCode($mail_code, $mail = null) {
         if (!isset($_SESSION)) {
             session_start();
         }
         $session_code = isset($_SESSION['mail_code']) ? $_SESSION['mail_code'] : '';
-        unset($_SESSION['code']);
+        $session_mail = isset($_SESSION['mail']) ? $_SESSION['mail'] : '';
+        unset($_SESSION['mail_code']);
         if (!$mail_code || $mail_code !== $session_code) {
+            return false;
+        }
+        if ($mail !== null && strcasecmp(trim((string)$mail), trim((string)$session_mail)) !== 0) {
             return false;
         }
         return true;

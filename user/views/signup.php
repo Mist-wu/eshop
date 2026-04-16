@@ -166,24 +166,28 @@
     .captcha-group {
         display: flex;
         gap: 10px;
-    }
-
-    .captcha-group .layui-input-block {
-        flex: 2;
-        margin-right: 10px;
-    }
-
-    .captcha-img {
-        flex: 1;
-        height: 44px;
-        background: #f2f2f2;
-        border-radius: 6px;
-        cursor: pointer;
-        display: flex;
         align-items: center;
-        justify-content: center;
-        color: #999;
+    }
+
+    .captcha-group .layui-input {
+        flex: 1;
+    }
+
+    .code-btn {
+        width: 148px;
+        flex: 0 0 148px;
+        font-size: 14px;
+    }
+
+    .code-btn:hover {
+        transform: none;
+    }
+
+    .send-btn-resp {
+        display: none;
+        margin-top: 8px;
         font-size: 12px;
+        color: #ff5722;
     }
 
     @media (max-width: 768px) {
@@ -231,43 +235,47 @@
         <!-- 注册方式切换 -->
         <?php if(Option::get('register_email_switch') == 'y' && Option::get('register_tel_switch') == 'y'): ?>
         <div class="register-toggle">
-            <div class="toggle-item active" data-type="phone">手机号码注册</div>
-            <div class="toggle-item" data-type="email">邮箱注册</div>
+            <div class="toggle-item <?= $default_type === 'tel' ? 'active' : '' ?>" data-type="tel">手机号码注册</div>
+            <div class="toggle-item <?= $default_type === 'email' ? 'active' : '' ?>" data-type="email">邮箱注册</div>
         </div>
         <?php endif; ?>
 
         <form class="layui-form" lay-filter="registerForm">
             <!-- 手机号码输入框 -->
             <?php if(Option::get('register_tel_switch') == 'y'): ?>
-            <div class="form-group phone-field">
+            <div class="form-group phone-field <?= $default_type !== 'tel' ? 'display-hide' : '' ?>">
                 <label class="layui-form-label">
                     <i class="fa fa-phone"></i>
                 </label>
                 <div class="layui-input-block">
-                    <input type="tel" name="tel" placeholder="请输入手机号码" autocomplete="off" class="layui-input">
+                    <input type="tel" name="tel" id="register-tel" placeholder="请输入手机号码" autocomplete="off" class="layui-input">
                 </div>
             </div>
             <?php endif; ?>
 
             <!-- 邮箱输入框（默认隐藏） -->
             <?php if(Option::get('register_email_switch') == 'y'): ?>
-            <div class="form-group email-field <?= Option::get('register_tel_switch') == 'y' ? 'display-hide' : '' ?>">
+            <div class="form-group email-field <?= $default_type !== 'email' ? 'display-hide' : '' ?>">
                 <label class="layui-form-label">
                     <i class="fa fa-envelope"></i>
                 </label>
                 <div class="layui-input-block">
-                    <input type="text" name="email" placeholder="请输入邮箱地址" autocomplete="off" class="layui-input">
+                    <input type="text" name="email" id="register-mail" placeholder="请输入邮箱地址" autocomplete="off" class="layui-input">
                 </div>
             </div>
             <?php endif; ?>
 
-            <!-- 验证码 -->
-            <div class="form-group captcha-group" style="display: none;">
+            <?php if ($email_code && Option::get('register_email_switch') == 'y'): ?>
+            <div class="form-group email-code-field <?= $default_type !== 'email' ? 'display-hide' : '' ?>">
                 <div class="layui-input-block">
-                    <input type="text" name="code" placeholder="请输入验证码" autocomplete="off" class="layui-input">
+                    <div class="captcha-group">
+                        <input type="text" name="mail_code" id="mail_code" placeholder="请输入邮件验证码" autocomplete="off" class="layui-input">
+                        <button type="button" class="layui-btn code-btn" id="send-btn">发送验证码</button>
+                    </div>
+                    <div id="send-btn-resp" class="send-btn-resp"></div>
                 </div>
-                <div class="captcha-img" id="getCode">获取验证码</div>
             </div>
+            <?php endif; ?>
 
             <!-- 密码 -->
             <div class="form-group">
@@ -317,9 +325,33 @@
         var form = layui.form;
         var layer = layui.layer;
         var $ = layui.$;
+        var emailCodeEnabled = <?= $email_code ? 'true' : 'false' ?>;
+
+        function syncRegisterType() {
+            var type = $('#type').val();
+            var isEmail = type === 'email';
+
+            $('.phone-field').toggle(!isEmail);
+            $('.email-field').toggle(isEmail);
+            $('.email-code-field').toggle(isEmail && emailCodeEnabled);
+
+            $('input[name="tel"]').prop('required', !isEmail);
+            $('input[name="email"]').prop('required', isEmail);
+            $('input[name="mail_code"]').prop('required', isEmail && emailCodeEnabled);
+
+            if (!isEmail) {
+                $('#send-btn-resp').hide().text('');
+                $('#mail_code').val('');
+            }
+        }
 
         // 监听注册提交
         form.on('submit(register)', function(data) {
+            if (data.field.type === 'email' && emailCodeEnabled && !$.trim(data.field.mail_code || '')) {
+                layer.msg('请输入邮件验证码');
+                return false;
+            }
+
             layer.load(2);
             var url = "./account.php?action=dosignup";
 
@@ -355,122 +387,69 @@
         $('.toggle-item').click(function() {
             var type = $(this).data('type');
             $(this).addClass('active').siblings().removeClass('active');
-
-            if (type === 'phone') {
-                $('#type').val('tel');
-                $('.phone-field').show();
-                $('.email-field').hide();
-            } else {
-                $('#type').val('email');
-                $('.phone-field').hide();
-                $('.email-field').show();
-            }
+            $('#type').val(type);
+            syncRegisterType();
         });
 
+        $('#send-btn').click(function() {
+            var sendBtn = $(this);
+            var sendBtnResp = $('#send-btn-resp');
+            var email = $.trim($('#register-mail').val());
 
-        // 验证码倒计时
-        var countdown = 60;
-        $('#getCode').click(function() {
-            var $this = $(this);
-            var isPhone = $('.toggle-item[data-type="phone"]').hasClass('active');
-            var account = isPhone ? $('input[name="phone"]').val() : $('input[name="email"]').val();
-
-            // 验证账号
-            if (!account) {
-                layer.tips(isPhone ? '请输入手机号码' : '请输入邮箱地址', isPhone ? 'input[name="phone"]' : 'input[name="email"]', {
+            if (!email) {
+                layer.tips('请输入邮箱地址', '#register-mail', {
                     tips: [2, '#ff5722'],
                     time: 2000
                 });
                 return;
             }
 
-            // 验证格式
-            if (isPhone && !/^1[3-9]\d{9}$/.test(account)) {
-                layer.tips('请输入正确的手机号码', 'input[name="phone"]', {
+            if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
+                layer.tips('请输入正确的邮箱地址', '#register-mail', {
                     tips: [2, '#ff5722'],
                     time: 2000
                 });
                 return;
             }
 
-            if (!isPhone && !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(account)) {
-                layer.tips('请输入正确的邮箱地址', 'input[name="email"]', {
-                    tips: [2, '#ff5722'],
-                    time: 2000
-                });
-                return;
-            }
-
-            // 倒计时逻辑
-            var timer = setInterval(function() {
-                if (countdown <= 0) {
-                    clearInterval(timer);
-                    $this.text('重新获取');
-                    $this.css({
-                        'background': '#f2f2f2',
-                        'color': '#999'
-                    });
-                    countdown = 60;
-                } else {
-                    $this.text('重新发送(' + countdown + ')');
-                    $this.css({
-                        'background': '#e6e6e6',
-                        'color': '#666'
-                    });
-                    countdown--;
-                }
-            }, 1000);
-
-            // 模拟发送验证码
-            layer.msg('验证码已发送，请注意查收', {icon: 1, time: 2000});
-        });
-
-
-    });
-</script>
-
-</body>
-</html>
-<script>
-    // send mail code
-    $(function () {
-        $('#checkcode').click(function () {
-            var timestamp = new Date().getTime();
-            $(this).attr("src", "../include/lib/checkcode.php?" + timestamp);
-        });
-
-        $('#send-btn').click(function () {
-            const email = $('#mail').val();
-            const sendBtn = $(this);
-            const sendBtnResp = $('#send-btn-resp');
-            sendBtnResp.html('')
+            sendBtnResp.hide().text('');
             sendBtn.prop('disabled', true);
+
             $.ajax({
                 type: 'POST',
                 url: './account.php?action=send_email_code',
                 data: {
                     mail: email
                 },
-                success: function (response) {
-                    // 发送邮件成功后，启动倒计时
-                    let seconds = 60;
-                    // 启动倒计时
-                    const countdownInterval = setInterval(() => {
+                dataType: 'json',
+                success: function () {
+                    var seconds = 60;
+                    layer.msg('验证码已发送，请注意查收', {icon: 1, time: 2000});
+                    sendBtn.text('已发送 ' + seconds + 's');
+                    var countdownInterval = setInterval(function() {
                         seconds--;
                         if (seconds <= 0) {
                             clearInterval(countdownInterval);
-                            sendBtn.html('发送邮件验证码');
+                            sendBtn.text('发送验证码');
                             sendBtn.prop('disabled', false);
                         } else {
-                            sendBtn.html('已发送,请查收邮件 ' + seconds + '秒');
+                            sendBtn.text('已发送 ' + seconds + 's');
                         }
                     }, 1000);
                 },
-                error: function (data) {
-                    sendBtnResp.html(data.responseJSON.msg).addClass('text-danger').show()
+                error: function (xhr) {
+                    var msg = '发送邮件失败';
+                    if (xhr.responseJSON && xhr.responseJSON.msg) {
+                        msg = xhr.responseJSON.msg;
+                    }
+                    sendBtnResp.text(msg).show();
                     sendBtn.prop('disabled', false);
                 }
             });
         });
+
+        syncRegisterType();
     });
 </script>
+</body>
+</html>

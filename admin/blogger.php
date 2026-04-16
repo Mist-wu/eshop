@@ -103,7 +103,7 @@ if ($action === 'change_email') {
         Output::error('邮箱已被占用');
     }
 
-    if (!User::checkMailCode($mail_code)) {
+    if (!User::checkMailCode($mail_code, $email)) {
         Output::error('验证码错误');
     }
 
@@ -113,6 +113,7 @@ if ($action === 'change_email') {
 
     $User_Model->updateUser($d, UID);
     $CACHE->updateCache('user');
+    unset($_SESSION['mail']);
     Output::ok();
 }
 

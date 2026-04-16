@@ -121,7 +121,7 @@ if ($action == 'dosignup') {
     loginAuth::checkLogged();
 
     if (Option::get('register_switch') !== 'y') {
-        output::ok('管理员已关闭注册功能');
+        Output::error('管理员已关闭注册功能');
     }
 
     doAction('user_register_submit');
@@ -142,20 +142,21 @@ if ($action == 'dosignup') {
         if ($User_Model->isMailExist($mail)) {
             Output::error('该邮箱已被注册');
         }
-    }
-    if($type == 'tel'){
+    } elseif($type == 'tel'){
         if(strlen($tel) != 11){
             output::error('手机号码填写错误');
         }
         if ($User_Model->isTelExist($tel)) {
             Output::error('该手机号码已被注册');
         }
+    } else {
+        Output::error('注册类型错误');
     }
 
     if (!User::checkLoginCode($login_code)) {
         Output::error('图形验证码错误');
     }
-    if (Option::get('email_code') === 'y' && !User::checkMailCode($mail_code)) {
+    if ($type == 'email' && Option::get('email_code') === 'y' && !User::checkMailCode($mail_code, $mail)) {
         Output::error('邮件验证码错误');
     }
 
@@ -175,6 +176,7 @@ if ($action == 'dosignup') {
     }else{
         $User_Model->addUser('', $mail, $passwd, $reg_ip,  User::ROLE_WRITER, 'email');
         $account = $mail;
+        unset($_SESSION['mail']);
     }
 
     $CACHE->updateCache(['sta', 'user']);
