@@ -1488,7 +1488,7 @@ function adminStockEm($goods){
     if ($keyword !== '') {
         $keywordEsc = $db->escape_string($keyword);
         $like = "%{$keywordEsc}%";
-        $where .= " AND (su.content LIKE '{$like}' OR o.up_no LIKE '{$like}' OR o.out_trade_no LIKE '{$like}')";
+        $where .= " AND (su.content LIKE '{$like}' OR o.up_no LIKE '{$like}' OR o.out_trade_no LIKE '{$like}' OR o.trade_no LIKE '{$like}' OR o.api_trade_no LIKE '{$like}')";
     }
 
     $countRow = $db->once_fetch_array("SELECT COUNT(*) as total

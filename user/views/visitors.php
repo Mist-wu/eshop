@@ -513,8 +513,8 @@
                 <div class="query-form">
                     <div class="form-group">
                         <label for="orderNumber">订单编号</label>
-                        <input type="text" name="order_no" placeholder="请输入站内订单号或支付订单号" class="form-control layui-input" required>
-                        <p class="form-hint">支持站内订单号和支付平台订单号；当前浏览器下过单可直接查询，非当前浏览器请补充下单信息完成校验</p>
+                        <input type="text" name="order_no" placeholder="请输入站内订单号/易付通订单号/渠道订单号" class="form-control layui-input" required>
+                        <p class="form-hint">支持站内订单号、易付通订单号和支付宝/微信渠道订单号；当前浏览器下过单可直接查询，非当前浏览器请补充下单信息完成校验</p>
                     </div>
                     <?php if(isset($visitor_required['contact'])): ?>
                     <div class="form-group">

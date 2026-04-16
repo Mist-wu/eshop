@@ -339,7 +339,9 @@ if ($orderStatus === 1) {
         <div class="once-header-top">
             <div class="once-header-title">
                 <h2><?= htmlspecialchars($goods['title'] ?? '商品') ?></h2>
-                <p>订单号：<?= htmlspecialchars($order['out_trade_no'] ?? '-') ?></p>
+                <?php foreach (orderPaymentReferenceList($order) as $label => $value): ?>
+                    <p><?= htmlspecialchars($label) ?>：<?= htmlspecialchars($value) ?></p>
+                <?php endforeach; ?>
             </div>
             <span class="status-pill <?= $statusClass ?>"><?= htmlspecialchars($orderStatusText) ?></span>
         </div>

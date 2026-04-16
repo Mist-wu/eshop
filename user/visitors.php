@@ -314,6 +314,8 @@ if($action == 'visitors_search_order'){
             'id' => (int)$order['id'],
             'out_trade_no' => $order['out_trade_no'],
             'up_no' => $order['up_no'] ?? '',
+            'trade_no' => $order['trade_no'] ?? '',
+            'api_trade_no' => $order['api_trade_no'] ?? '',
             'status' => $order['status'],
             'status_text' => orderStatusText($order['status']),
             'amount' => number_format($order['amount'] / 100, 2),
