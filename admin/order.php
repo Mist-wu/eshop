@@ -121,8 +121,7 @@ if($action == 'download'){
 
 // 补单
 if($action == 'repay'){
-	
-//	LoginAuth::checkToken();
+    LoginAuth::checkToken();
     $out_trade_no = Input::postStrVar('out_trade_no');
     $payController = new Pay_Controller();
     $payController->repay($out_trade_no);

@@ -10,6 +10,8 @@ class Order_Model {
     private $table;
     private $db_prefix;
     private static $expiredUnpaidCleaned = false;
+    private static $expiredUnpaidCleanupChecked = false;
+    private static $orderPaymentReferenceSchemaChecked = false;
 
     public function __construct() {
         $this->db = Database::getInstance();
@@ -17,12 +19,97 @@ class Order_Model {
         $this->db_prefix = DB_PREFIX;
         $this->Parsedown = new Parsedown();
         $this->Parsedown->setBreaksEnabled(true); //automatic line wrapping
-        $this->cleanupExpiredUnpaidOrders();
+        $this->ensureOrderPaymentReferenceSchema();
+    }
+
+    protected function ensureOrderPaymentReferenceSchema() {
+        if (self::$orderPaymentReferenceSchemaChecked) {
+            return;
+        }
+        self::$orderPaymentReferenceSchemaChecked = true;
+
+        $alterClauses = [];
+        if (!$this->orderTableHasColumn('trade_no')) {
+            $alterClauses[] = "ADD COLUMN `trade_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '易付通平台订单号'";
+        }
+        if (!$this->orderTableHasColumn('api_trade_no')) {
+            $alterClauses[] = "ADD COLUMN `api_trade_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '微信/支付宝渠道订单号'";
+        }
+        if (!$this->orderTableHasIndex('idx_order_trade_no')) {
+            $alterClauses[] = "ADD INDEX `idx_order_trade_no`(`trade_no`)";
+        }
+        if (!$this->orderTableHasIndex('idx_order_api_trade_no')) {
+            $alterClauses[] = "ADD INDEX `idx_order_api_trade_no`(`api_trade_no`)";
+        }
+
+        if (empty($alterClauses)) {
+            return;
+        }
+
+        $this->db->query(
+            'ALTER TABLE ' . $this->quoteIdentifier($this->table) . "\n            " . implode(",\n            ", $alterClauses)
+        );
+        Log::info('订单表已自动补齐支付单号字段迁移');
+    }
+
+    private function orderTableHasColumn($columnName) {
+        if (!defined('DB_NAME')) {
+            return true;
+        }
+
+        $tableName = $this->db->escape_string($this->table);
+        $schemaName = $this->db->escape_string(DB_NAME);
+        $columnName = $this->db->escape_string((string)$columnName);
+
+        $sql = "SELECT 1 AS exists_flag
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = '{$schemaName}'
+                AND TABLE_NAME = '{$tableName}'
+                AND COLUMN_NAME = '{$columnName}'
+                LIMIT 1";
+
+        return !empty($this->db->once_fetch_array($sql));
+    }
+
+    private function orderTableHasIndex($indexName) {
+        if (!defined('DB_NAME')) {
+            return true;
+        }
+
+        $tableName = $this->db->escape_string($this->table);
+        $schemaName = $this->db->escape_string(DB_NAME);
+        $indexName = $this->db->escape_string((string)$indexName);
+
+        $sql = "SELECT 1 AS exists_flag
+                FROM INFORMATION_SCHEMA.STATISTICS
+                WHERE TABLE_SCHEMA = '{$schemaName}'
+                AND TABLE_NAME = '{$tableName}'
+                AND INDEX_NAME = '{$indexName}'
+                LIMIT 1";
+
+        return !empty($this->db->once_fetch_array($sql));
+    }
+
+    private function quoteIdentifier($identifier) {
+        return '`' . str_replace('`', '``', (string)$identifier) . '`';
     }
 
     /**
      * 自动清理超时未支付订单
      */
+    public function maybeCleanupExpiredUnpaidOrders($force = false) {
+        if (self::$expiredUnpaidCleanupChecked && !$force) {
+            return 0;
+        }
+        self::$expiredUnpaidCleanupChecked = true;
+
+        if (!$this->claimExpiredOrderCleanupSlot($force)) {
+            return 0;
+        }
+
+        return $this->cleanupExpiredUnpaidOrders(true);
+    }
+
     public function cleanupExpiredUnpaidOrders($force = false) {
         if (self::$expiredUnpaidCleaned && !$force) {
             return 0;
@@ -61,11 +148,61 @@ class Order_Model {
             $this->db->beginTransaction();
             $this->releaseCouponUsage($orderIds);
             $this->db->query("UPDATE {$this->table} SET status = -3, update_time = {$timestamp} WHERE id IN ({$idsStr})");
-            $this->db->query("UPDATE {$this->db_prefix}order_list SET status = -3 WHERE order_id IN ({$idsStr})");
+            $this->db->query("UPDATE {$this->db_prefix}order_list SET status = -3 WHERE order_id IN ({$idsStr}) AND status = 0");
             $this->db->commit();
         }
 
         return count($orderIds) + $recovered;
+    }
+
+    private function claimExpiredOrderCleanupSlot($force = false) {
+        if ($force) {
+            return true;
+        }
+
+        $interval = (int)emEnv('EM_ORDER_CLEANUP_INTERVAL', 300);
+        if ($interval < 30) {
+            $interval = 30;
+        }
+
+        $markerPath = $this->getExpiredOrderCleanupMarkerPath();
+        isFolder(dirname($markerPath), true);
+        $handle = @fopen($markerPath, 'c+');
+        if ($handle === false) {
+            return true;
+        }
+
+        if (!flock($handle, LOCK_EX)) {
+            fclose($handle);
+            return true;
+        }
+
+        $content = stream_get_contents($handle);
+        $lastRun = $this->parseCleanupMarkerTimestamp($content);
+        $now = time();
+        if ($lastRun > 0 && ($now - $lastRun) < $interval) {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+            return false;
+        }
+
+        ftruncate($handle, 0);
+        rewind($handle);
+        fwrite($handle, "<?php exit;//" . $now);
+        fflush($handle);
+        flock($handle, LOCK_UN);
+        fclose($handle);
+
+        return true;
+    }
+
+    private function getExpiredOrderCleanupMarkerPath() {
+        return EM_ROOT . '/content/cache/order_cleanup_runtime.php';
+    }
+
+    private function parseCleanupMarkerTimestamp($content) {
+        $content = trim(str_replace('<?php exit;//', '', (string)$content));
+        return ctype_digit($content) ? (int)$content : 0;
     }
 
     private function tryRecoverExpiredPaidOrder($orderRow) {
@@ -120,7 +257,7 @@ class Order_Model {
         return array_values(array_unique($ids));
     }
 
-    private function buildUpdateAssignments($data) {
+    protected function buildUpdateAssignments($data) {
         $items = [];
         foreach ((array)$data as $key => $var) {
             if ($var === null) {
@@ -524,6 +661,20 @@ class Order_Model {
      * 通过订单号获取主订单信息
      */
     public function getOrderInfoRaw($out_trade_no, $includeDeleted = false) {
+        $out_trade_no = trim((string)$out_trade_no);
+        if ($out_trade_no === '') {
+            return [];
+        }
+
+        $row = $this->fetchOrderInfoRaw($out_trade_no, $includeDeleted);
+        if ($this->resolveExpiredPendingOrder($row)) {
+            $row = $this->fetchOrderInfoRaw($out_trade_no, $includeDeleted);
+        }
+
+        return $row;
+    }
+
+    private function fetchOrderInfoRaw($out_trade_no, $includeDeleted = false) {
         $out_trade_no = $this->db->escape_string($out_trade_no);
         $sql = "SELECT * FROM {$this->table} WHERE out_trade_no='{$out_trade_no}'";
         if (!$includeDeleted) {
@@ -552,6 +703,20 @@ class Order_Model {
      */
     public function getOrderInfoId($id, $includeDeleted = false) {
         $id = (int)$id;
+        if ($id <= 0) {
+            return [];
+        }
+
+        $row = $this->fetchOrderInfoById($id, $includeDeleted);
+        if ($this->resolveExpiredPendingOrder($row)) {
+            $row = $this->fetchOrderInfoById($id, $includeDeleted);
+        }
+
+        return $row;
+    }
+
+    private function fetchOrderInfoById($id, $includeDeleted = false) {
+        $id = (int)$id;
         $sql = "SELECT * FROM {$this->table} WHERE id={$id}";
         if (!$includeDeleted) {
             $sql .= " AND delete_time IS NULL";
@@ -578,7 +743,65 @@ class Order_Model {
         }
         $sql .= " LIMIT 1";
 
-        return $this->db->once_fetch_array($sql) ?: [];
+        $row = $this->db->once_fetch_array($sql) ?: [];
+        if ($this->resolveExpiredPendingOrder($row)) {
+            $row = $this->db->once_fetch_array($sql) ?: [];
+        }
+
+        return $row;
+    }
+
+    private function resolveExpiredPendingOrder($orderRow) {
+        $orderRow = is_array($orderRow) ? $orderRow : [];
+        if (!$this->isExpiredPendingUnpaidOrder($orderRow)) {
+            return false;
+        }
+
+        if ($this->tryRecoverExpiredPaidOrder($orderRow)) {
+            return true;
+        }
+
+        $orderId = (int)($orderRow['id'] ?? 0);
+        if ($orderId <= 0) {
+            return false;
+        }
+
+        $timestamp = time();
+        $this->db->beginTransaction();
+        $this->db->query(
+            "UPDATE {$this->table}
+             SET status = -3, update_time = {$timestamp}
+             WHERE id = {$orderId}
+             AND delete_time IS NULL
+             AND status = 0
+             AND (pay_time IS NULL OR pay_time = 0 OR pay_time = '')
+             AND (pay_status IS NULL OR pay_status <> 1)
+             AND expire_time IS NOT NULL
+             AND expire_time > 0
+             AND expire_time <= {$timestamp}"
+        );
+        $affected = (int)$this->db->affected_rows();
+        if ($affected > 0) {
+            $this->releaseCouponUsage($orderId);
+            $this->db->query("UPDATE {$this->db_prefix}order_list SET status = -3 WHERE order_id = {$orderId} AND status = 0");
+        }
+        $this->db->commit();
+
+        return $affected > 0;
+    }
+
+    private function isExpiredPendingUnpaidOrder($orderRow) {
+        $orderRow = is_array($orderRow) ? $orderRow : [];
+        if (empty($orderRow)) {
+            return false;
+        }
+
+        return empty($orderRow['delete_time'])
+            && (int)($orderRow['status'] ?? 0) === 0
+            && (int)($orderRow['pay_status'] ?? 0) !== 1
+            && !empty($orderRow['expire_time'])
+            && (int)$orderRow['expire_time'] > 0
+            && (int)$orderRow['expire_time'] <= time();
     }
     /**
      * 获取子订单信息
@@ -633,7 +856,7 @@ sql;
             'delete_time' => null,
             'update_time' => $timestamp,
         ];
-        if ((int)($order['status'] ?? 0) < 0) {
+        if ($this->shouldRecoverOrderStateAfterConfirmedPayment($order)) {
             $orderUpdate['status'] = 0;
         }
 
@@ -653,7 +876,7 @@ sql;
                     $patch[$field] = $orderUpdate[$field];
                 }
             }
-            if ((int)($order['status'] ?? 0) < 0) {
+            if ($this->shouldRecoverOrderStateAfterConfirmedPayment($order)) {
                 $patch['status'] = 0;
             }
             $this->updateOrderInfoById((int)$order['id'], $patch);
@@ -665,7 +888,7 @@ sql;
         }
 
         $deliverResult = ['code' => 0, 'msg' => 'skipped'];
-        if ((int)($currentOrder['pay_status'] ?? 0) === 1 && (int)($currentOrder['status'] ?? 0) <= 0) {
+        if ($this->shouldDeliverAfterConfirmedPayment($currentOrder)) {
             $deliverResult = $this->deliver((int)$currentOrder['id']);
             if (isset($deliverResult['code']) && (int)$deliverResult['code'] !== 0 && (int)$deliverResult['code'] !== 200) {
                 Log::warning('支付成功后发货失败：' . $out_trade_no . ' - ' . ($deliverResult['msg'] ?? 'unknown'));
@@ -680,6 +903,26 @@ sql;
             'deliver' => $deliverResult,
             'source' => $options['source'] ?? '',
         ];
+    }
+
+    private function shouldRecoverOrderStateAfterConfirmedPayment($order) {
+        $order = is_array($order) ? $order : [];
+        $status = (int)($order['status'] ?? 0);
+        if ($status === -1) {
+            return false;
+        }
+
+        return !empty($order['delete_time']) || in_array($status, [-2, -3], true);
+    }
+
+    private function shouldDeliverAfterConfirmedPayment($order) {
+        $order = is_array($order) ? $order : [];
+        if ((int)($order['pay_status'] ?? 0) !== 1) {
+            return false;
+        }
+
+        $status = (int)($order['status'] ?? 0);
+        return in_array($status, [0, 1], true);
     }
 
     public function reconcileOrderPayment($reference) {
@@ -924,6 +1167,7 @@ sql;
      * 获取订单总数
      */
     public function getOrderNum($where) {
+        $this->maybeCleanupExpiredUnpaidOrders();
         $w = "";
         $prefix = DB_PREFIX;
         if(!empty($where['email_username'])){
@@ -978,6 +1222,7 @@ sql;
      * 获取订单总金额
      */
     public function getOrderTotalAmount($where) {
+        $this->maybeCleanupExpiredUnpaidOrders();
         $w = "";
         $prefix = DB_PREFIX;
         if(!empty($where['email_username'])){
@@ -1030,6 +1275,7 @@ sql;
      * 获取订单列表
      */
     public function getOrderForAdmin($start, $limit, $where) {
+        $this->maybeCleanupExpiredUnpaidOrders();
 
         $prefix = DB_PREFIX;
 
@@ -1174,6 +1420,7 @@ sql;
 
 
     public function getUserOrderForHome($page = 1) {
+        $this->maybeCleanupExpiredUnpaidOrders();
         $perpage_num = Option::get('admin_article_perpage_num');
         $perpage_num = $perpage_num ? $perpage_num : 10;
 
@@ -1244,6 +1491,7 @@ sql;
      * 根据订单号和游客信息查询订单
      */
     public function getOrderByVisitorInfo($order_no, $contact = '', $password = '', $includeDeleted = false) {
+        $this->maybeCleanupExpiredUnpaidOrders();
         $order_no = $this->db->escape_string($order_no);
         $contact = $this->db->escape_string($contact);
         $password = $this->db->escape_string($password);
@@ -1266,6 +1514,9 @@ sql;
         $sql = "SELECT * FROM {$this->table} WHERE {$where} LIMIT 1";
 
         $order = $this->db->once_fetch_array($sql);
+        if ($this->resolveExpiredPendingOrder($order)) {
+            $order = $this->db->once_fetch_array($sql);
+        }
 
         return $order;
     }
@@ -1274,6 +1525,7 @@ sql;
      * 根据游客信息查询订单列表
      */
     public function getOrdersByVisitorInfo($contact = '', $password = '', $page = 1, $pageSize = 10) {
+        $this->maybeCleanupExpiredUnpaidOrders();
         $contact = $this->db->escape_string($contact);
         $password = $this->db->escape_string($password);
 
@@ -1329,6 +1581,7 @@ sql;
      * 根据游客信息查询订单数量
      */
     public function getOrdersCountByVisitorInfo($contact = '', $password = '') {
+        $this->maybeCleanupExpiredUnpaidOrders();
         $contact = $this->db->escape_string($contact);
         $password = $this->db->escape_string($password);
 
@@ -1357,6 +1610,7 @@ sql;
      * 游客查询订单 - 订单总数量
      */
     public function getYoukeOrderCount($pwd) {
+        $this->maybeCleanupExpiredUnpaidOrders();
         $prefix = DB_PREFIX;
         $sql = "SELECT count(o.id) AS total FROM $this->table as o LEFT JOIN {$prefix}order_list as ol on o.id=ol.order_id where delete_time is null and (contact = '{$pwd}' or up_no='{$pwd}' or out_trade_no='{$pwd}' or trade_no='{$pwd}' or api_trade_no='{$pwd}' or ol.attach_user LIKE '%:\"{$pwd}\"%')";
         $data = $this->db->once_fetch_array($sql);
@@ -1367,6 +1621,7 @@ sql;
      * 游客订单列表
      */
     public function getYoukeOrderForHome($keyword, $page = 1, $pageNum = 10) {
+        $this->maybeCleanupExpiredUnpaidOrders();
         if (is_numeric($keyword) && !is_numeric($page)) {
             $temp = $keyword;
             $keyword = $page;
@@ -1416,6 +1671,7 @@ sql;
      * 获取登录用户的订单数量
      */
     public function getOrderCountForHome($user_id, $status = null, $search = null){
+        $this->maybeCleanupExpiredUnpaidOrders();
         $sql = "SELECT count(*) as total FROM {$this->db_prefix}order o 
                 LEFT JOIN {$this->db_prefix}order_list ol ON o.id = ol.order_id
                 LEFT JOIN {$this->db_prefix}goods g ON ol.goods_id = g.id
@@ -1445,6 +1701,7 @@ sql;
      * 获取登录用户的订单
      */
     public function getOrderForHome($user_id, $page = 1, $pageSize = 10, $status = null, $search = null){
+        $this->maybeCleanupExpiredUnpaidOrders();
         $offset = ($page - 1) * $pageSize;
         $prefix = DB_PREFIX;
         

@@ -14,12 +14,11 @@ class Pay_Controller {
             emMsg('非法请求');
         }
 
-        $orderModel = new Order_Model();
+        $orderModel = $this->createOrderModel();
         $db = Database::getInstance();
         $db_prefix = DB_PREFIX;
 
-        $sql = "select * from {$db_prefix}order where out_trade_no = '{$out_trade_no}' and delete_time is null limit 1";
-        $order = $db->once_fetch_array($sql);
+        $order = $orderModel->getOrderInfoRaw($out_trade_no);
         if (empty($order)) {
             emMsg('非法请求');
         }
@@ -93,6 +92,7 @@ class Pay_Controller {
         $checkSign = $this->resolveCallbackPayload();
         if (!$checkSign) {
             Log::info('异步回调 - 验签失败');
+            http_response_code(400);
             echo '验签失败';
             return;
         }
@@ -101,6 +101,9 @@ class Pay_Controller {
         $result = $this->processPaymentCallback($checkSign, 'notify');
         if (empty($result['ok'])) {
             Log::warning('异步回调站内处理失败：' . ($checkSign['out_trade_no'] ?? '') . ' - ' . ($result['msg'] ?? 'unknown'));
+            http_response_code(500);
+            echo 'fail';
+            die;
         }
 
         echo 'success';
@@ -111,10 +114,13 @@ class Pay_Controller {
      * 补单
      */
     public function repay($out_trade_no) {
-        $orderModel = new Order_Model();
+        $orderModel = $this->createOrderModel();
         $order_info = $orderModel->getOrderInfo($out_trade_no, true);
         if (empty($order_info)) {
             Ret::error('订单不存在或已失效');
+        }
+        if (!empty($order_info['delete_time']) || (int)($order_info['status'] ?? 0) < 0) {
+            Ret::error('订单已取消、过期、删除或处于异常履约状态，不支持补单');
         }
 
         $payment_name = empty($order_info['payment']) ? '后台补单' : $order_info['payment'];
@@ -136,7 +142,7 @@ class Pay_Controller {
     public function isPay() {
         $out_trade_no = Input::postStrVar('out_trade_no');
 
-        $orderModel = new Order_Model();
+        $orderModel = $this->createOrderModel();
         $order_info = $orderModel->getOrderInfo($out_trade_no, true);
         if (empty($order_info)) {
             $url = ISLOGIN ? EM_URL . 'user/order.php' : EM_URL . 'user/visitors.php';
@@ -206,15 +212,15 @@ class Pay_Controller {
         return $checkFunc(strpos($path, '/action/return/') !== false ? 'return' : 'notify');
     }
 
-    private function processPaymentCallback($checkSign, $source) {
-        $orderModel = new Order_Model();
+    protected function processPaymentCallback($checkSign, $source, $options = []) {
+        $orderModel = $this->createOrderModel();
         $outTradeNo = trim((string)($checkSign['out_trade_no'] ?? ''));
         $result = $orderModel->processConfirmedPayment($outTradeNo, $checkSign, ['source' => $source]);
         if (!empty($result['ok'])) {
             return $result;
         }
 
-        if ($outTradeNo !== '') {
+        if (!empty($options['allow_reconcile_retry']) && $outTradeNo !== '') {
             $retry = $orderModel->reconcileOrderPayment($outTradeNo);
             if (!empty($retry['ok'])) {
                 return $retry;
@@ -233,5 +239,9 @@ class Pay_Controller {
         }
 
         return ISLOGIN ? EM_URL . 'user/order.php' : EM_URL . 'user/visitors.php';
+    }
+
+    protected function createOrderModel() {
+        return new Order_Model();
     }
 }

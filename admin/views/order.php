@@ -528,7 +528,7 @@ defined('EM_ROOT') || exit('access denied!');
                         url: '?action=repay',
                         type: 'POST',
                         dataType: 'json',
-                        data: { out_trade_no: data.out_trade_no },
+                        data: { out_trade_no: data.out_trade_no, token: '<?= LoginAuth::genToken() ?>' },
                         success: function(e) {
                             if(e.code == 400){
                                 return layer.msg(e.msg)

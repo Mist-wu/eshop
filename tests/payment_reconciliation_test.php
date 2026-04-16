@@ -14,6 +14,7 @@ $GLOBALS['test_gateway_calls'] = [];
 $GLOBALS['test_gateway_handlers'] = [];
 $GLOBALS['test_db_orders'] = [];
 $GLOBALS['test_logs'] = [];
+$GLOBALS['test_cleanup_queries'] = 0;
 
 function addAction($hook, $callback) {}
 function doAction(...$args) {}
@@ -193,6 +194,7 @@ class Database {
 
     public function fetch_all($sql) {
         if (stripos($sql, 'SELECT id, out_trade_no, pay_plugin FROM') !== false) {
+            $GLOBALS['test_cleanup_queries']++;
             return [];
         }
         return [];
@@ -266,13 +268,18 @@ class Url {
 
 require_once EM_ROOT . '/include/model/order_model.php';
 require_once EM_ROOT . '/include/lib/yifut.php';
+require_once EM_ROOT . '/include/controller/pay_controller.php';
 
-final class TestableOrderModel extends Order_Model {
+class TestableOrderModel extends Order_Model {
     public $orders = [];
     public $couponConfirmed = [];
     public $deliverCalls = [];
 
-    public function __construct() {}
+    public function __construct($bootstrapBase = false) {
+        if ($bootstrapBase) {
+            parent::__construct();
+        }
+    }
 
     public function getOrderInfoRaw($out_trade_no, $includeDeleted = false) {
         return $this->orders[$out_trade_no] ?? [];
@@ -344,6 +351,43 @@ final class TestableOrderModel extends Order_Model {
         }
         return ['code' => 200, 'content' => ['ok']];
     }
+
+    public function buildUpdateAssignmentsPublic($data) {
+        return $this->buildUpdateAssignments($data);
+    }
+}
+
+final class CallbackTrackingOrderModel extends TestableOrderModel {
+    public $forcedProcessResult = null;
+    public $reconcileCalls = [];
+
+    public function processConfirmedPayment($out_trade_no, $paymentData = [], $options = []) {
+        if ($this->forcedProcessResult !== null) {
+            return $this->forcedProcessResult;
+        }
+        return parent::processConfirmedPayment($out_trade_no, $paymentData, $options);
+    }
+
+    public function reconcileOrderPayment($reference) {
+        $this->reconcileCalls[] = (string)$reference;
+        return ['ok' => true, 'msg' => 'unexpected reconcile'];
+    }
+}
+
+final class TestablePayController extends Pay_Controller {
+    private $orderModel;
+
+    public function __construct($orderModel) {
+        $this->orderModel = $orderModel;
+    }
+
+    protected function createOrderModel() {
+        return $this->orderModel;
+    }
+
+    public function processPaymentCallbackPublic($checkSign, $source, $options = []) {
+        return $this->processPaymentCallback($checkSign, $source, $options);
+    }
 }
 
 function testGenerateKeyPair() {
@@ -376,6 +420,7 @@ function testResetGateway() {
     $GLOBALS['test_gateway_handlers'] = [];
     $GLOBALS['test_db_orders'] = [];
     $GLOBALS['test_logs'] = [];
+    $GLOBALS['test_cleanup_queries'] = 0;
     $GLOBALS['test_env'] = $GLOBALS['test_env_base'];
     $_GET = [];
     $_POST = [];
@@ -441,10 +486,8 @@ $testsRun = testCase('order status text and payment reference labels', function 
 });
 
 $testsRun = testCase('build update assignments keeps null bool number and escaped string semantics', function () {
-    $model = new Order_Model();
-    $method = new ReflectionMethod(Order_Model::class, 'buildUpdateAssignments');
-    $method->setAccessible(true);
-    $sql = $method->invoke($model, [
+    $model = new TestableOrderModel(true);
+    $sql = $model->buildUpdateAssignmentsPublic([
         'delete_time' => null,
         'pay_status' => true,
         'pay_time' => 123456,
@@ -455,6 +498,11 @@ $testsRun = testCase('build update assignments keeps null bool number and escape
     testAssert(strpos($sql, 'pay_status=1') !== false, 'Bool true should map to 1');
     testAssert(strpos($sql, 'pay_time=123456') !== false, 'Numbers should stay unquoted');
     testAssert(strpos($sql, "payment='O\\'Reilly'") !== false, 'Strings should be escaped and quoted');
+});
+
+$testsRun = testCase('order model bootstrap no longer scans expired orders eagerly', function () {
+    new TestableOrderModel(true);
+    testAssertSame(0, $GLOBALS['test_cleanup_queries'], 'Order model constructor should stay lightweight');
 });
 
 $testsRun = testCase('yifut helper functions normalize device lookup payload and snapshots', function () {
@@ -600,6 +648,43 @@ $testsRun = testCase('process confirmed payment recovers expired unpaid orders a
     testAssert(!empty($second['ok']), 'Already paid order should still accept identifier patching');
     testAssertSame('ALI-5', $model->orders['LOCAL-5']['api_trade_no'], 'Already paid order should patch missing channel trade number');
     testAssertCount(0, $model->deliverCalls, 'Already delivered order should not deliver again');
+
+    $model->deliverCalls = [];
+    $model->orders['LOCAL-5P'] = [
+        'id' => 51,
+        'out_trade_no' => 'LOCAL-5P',
+        'status' => -1,
+        'pay_status' => 1,
+        'delete_time' => null,
+        'payment' => '支付宝',
+        'trade_no' => 'YFT-5P',
+        'api_trade_no' => '',
+        'up_no' => 'YFT-5P',
+    ];
+
+    $partial = $model->processConfirmedPayment('LOCAL-5P', [
+        'api_trade_no' => 'ALI-5P',
+        'up_no' => 'ALI-5P',
+    ], ['source' => 'partial_guard']);
+
+    testAssert(!empty($partial['ok']), 'Partially delivered order should still accept identifier patching');
+    testAssertSame(-1, $model->orders['LOCAL-5P']['status'], 'Partially delivered order should keep its partial status');
+    testAssertSame('ALI-5P', $model->orders['LOCAL-5P']['api_trade_no'], 'Partially delivered order should patch missing identifiers');
+    testAssertCount(0, $model->deliverCalls, 'Partially delivered order must not be fulfilled again');
+});
+
+$testsRun = testCase('payment callback failure no longer retries active reconcile in the same request', function () {
+    $model = new CallbackTrackingOrderModel();
+    $model->forcedProcessResult = ['ok' => false, 'msg' => 'deliver failed'];
+    $controller = new TestablePayController($model);
+
+    $result = $controller->processPaymentCallbackPublic([
+        'out_trade_no' => 'LOCAL-CB-1',
+        'trade_no' => 'YFT-CB-1',
+    ], 'notify');
+
+    testAssertSame(false, $result['ok'], 'Callback failure should be returned to the caller');
+    testAssertCount(0, $model->reconcileCalls, 'Callback failure should not immediately trigger a second reconcile request');
 });
 
 $testsRun = testCase('manual reconcile and recent paid reconcile use yifut query interfaces to fix local state', function () {

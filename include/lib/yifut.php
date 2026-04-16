@@ -439,9 +439,7 @@ function yifutVerifyPayloadSignature($payload) {
 
     $signContent = yifutBuildSignContent($payload);
     $verified = openssl_verify($signContent, base64_decode($sign), $publicKey, OPENSSL_ALGO_SHA256) === 1;
-    if (is_object($publicKey) || is_resource($publicKey)) {
-        openssl_free_key($publicKey);
-    }
+    yifutReleaseOpenSslKey($publicKey);
 
     return $verified;
 }
@@ -456,15 +454,19 @@ function yifutSign($payload) {
     $signContent = yifutBuildSignContent($payload);
     $result = openssl_sign($signContent, $sign, $privateKey, OPENSSL_ALGO_SHA256);
 
-    if (is_object($privateKey) || is_resource($privateKey)) {
-        openssl_free_key($privateKey);
-    }
+    yifutReleaseOpenSslKey($privateKey);
 
     if ($result !== true) {
         return '';
     }
 
     return base64_encode($sign);
+}
+
+function yifutReleaseOpenSslKey($key) {
+    if (is_resource($key)) {
+        openssl_free_key($key);
+    }
 }
 
 function yifutBuildSignContent($params) {
