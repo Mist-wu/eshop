@@ -99,15 +99,6 @@ class Goods_Model {
             $sortName = isset($sorts[$row['sort_id']]['sortname']) ? $sorts[$row['sort_id']]['sortname'] : '未知分类';
             $row['sort_name'] = $row['sort_id'] == -1 ? '未分类' : $sortName;
 
-            // 允许插件扩展商品数据（如对接商品显示来源站点）
-            if ($row['group_id'] == -1) {
-                $extendData = [];
-                doMultiAction('adm_goods_list_extend', $row, $extendData);
-                if (!empty($extendData)) {
-                    $row = array_merge($row, $extendData);
-                }
-            }
-
             $goods[] = $row;
         }
 
@@ -645,7 +636,7 @@ class Goods_Model {
         // echo $where;die;
         
         $sql = "SELECT
-            id, title, cover, des, type, config, sort_id, index_top, sort_top, 0 AS station_id, link
+            id, title, cover, des, type, config, sort_id, index_top, sort_top, link
         FROM {$this->table}
         WHERE is_on_shelf = 1 AND delete_time IS NULL {$where}
         ORDER BY sort_num DESC, index_top DESC, sort_top DESC, id asc";

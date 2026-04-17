@@ -91,8 +91,7 @@ if($post['is_sku'] == 'n'){
     }
 }
 if($post['is_sku'] == 'y'){
-    // 对接商品（group_id = -1）跳过规格模板验证
-    if($post['group_id'] != -1 && empty($post['group_id'])) Ret::error('请选择规格模板');
+    if(empty($post['group_id'])) Ret::error('请选择规格模板');
     if(empty($post['skus'])) Ret::error('请设置规格属性');
     foreach($post['skus'] as $key => $val){
         if(empty($val['guest_price'])) Ret::error('请输入游客访问价格');

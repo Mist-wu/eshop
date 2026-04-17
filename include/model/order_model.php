@@ -467,19 +467,6 @@ class Order_Model {
             }
         }
         
-        // 验证对接站点库存及余额是否充足
-        if($goods['group_id'] == -1){
-            $func = "remoteGoodsVerify" . ucfirst($goods['type']);
-            if(function_exists($func)){
-                $sku_str = empty($sku_ids) ? '0' : implode('-', $sku_ids);
-                $remote_res = $func($goods, $quantity, $sku_str);
-                if(is_array($remote_res) && isset($remote_res['code']) && (int)$remote_res['code'] !== 0){
-                    return $remote_res;
-                }
-            }else{
-                return ['code' => 400, 'msg' => '对接验证函数不存在'];
-            }
-        }
         // 构建规格描述
         $attr_spec = '';
         foreach($goods['skus']['option_name'] as $val){
@@ -1388,11 +1375,7 @@ sql;
                         $attach_user .= $k . '：' . $v . '；';
                     }
                     $row['attach_user'] = empty($attach_user) ? '无' : $attach_user;
-                    if (in_array($row['type'], ['em_auto', 'em_manual']) && function_exists('emFormatSkuOptionIds')) {
-                        $row['attr_spec'] = emFormatSkuOptionIds($row['goods_id'], $row['sku'] ?? '');
-                    } else {
-                        $row['attr_spec'] = empty($row['attr_spec']) ? '默认规格' : $row['attr_spec'];
-                    }
+                    $row['attr_spec'] = empty($row['attr_spec']) ? '默认规格' : $row['attr_spec'];
                     $data[$key]['list'][] = $row;
                     $row['attach_user'] = '';
                 }

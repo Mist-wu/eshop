@@ -344,11 +344,7 @@ if($action == 'visitors_search_order'){
         ];
 
         // 处理规格信息
-        if (in_array($goods['type'] ?? '', ['em_auto', 'em_manual']) && function_exists('emFormatSkuOptionIds')) {
-            $order_item['attr_spec'] = emFormatSkuOptionIds($row['goods_id'], $row['sku'] ?? '');
-        } else {
-            $order_item['attr_spec'] = empty($row['attr_spec']) ? '默认规格' : $row['attr_spec'];
-        }
+        $order_item['attr_spec'] = empty($row['attr_spec']) ? '默认规格' : $row['attr_spec'];
 
         // 处理附加选项
         $_text = empty($row['attach_user']) ? [] : json_decode($row['attach_user'], true);

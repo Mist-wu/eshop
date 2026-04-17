@@ -189,6 +189,8 @@ function goodsTypeText($goods_type){
     if($goods_type == 'xuni') $text = '虚拟服务';
     if($goods_type == 'guding') $text = '固定卡密';
     if($goods_type == 'post') $text = '接口类型';
+    if($goods_type == 'once') $text = '独立卡密';
+    if($goods_type == 'general') $text = '通用卡密';
     return $text;
 }
 
@@ -661,17 +663,6 @@ function realUrl() {
 }
 
 
-
-/**
- * 检查插件
- */
-function checkPlugin($plugin) {
-    if (is_string($plugin) && preg_match("/^[\w\-\/]+\.php$/", $plugin) && file_exists(EM_ROOT . '/content/plugins/' . $plugin)) {
-        return true;
-    }
-
-    return false;
-}
 
 /**
  * 验证email地址格式

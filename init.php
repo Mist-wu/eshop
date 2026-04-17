@@ -10,6 +10,7 @@ require_once EM_ROOT . '/include/lib/env.php';
 emLoadEnv();
 require_once EM_ROOT . '/base.php';
 require_once EM_ROOT . '/include/lib/common.php';
+require_once EM_ROOT . '/include/lib/builtin_modules.php';
 
 
 
@@ -90,16 +91,9 @@ define('USER_TEMPLATE_PATH', EM_ROOT . '/user/views/');
 define('BLOG_TEMPLATE_PATH', EM_ROOT . '/content/blog/default/');
 define('COMMON_TEMPLATE_PATH', EM_ROOT . '/content/common/');
 
-$active_plugins = Option::get('active_plugins');
 $emHooks = [];
 require_once EM_ROOT . '/include/lib/yifut.php';
-if ($active_plugins && is_array($active_plugins)) {
-    foreach ($active_plugins as $plugin) {
-        if (true === checkPlugin($plugin)) {
-            include_once(EM_ROOT . '/content/plugins/' . $plugin);
-        }
-    }
-}
+emLoadBuiltinModules();
 
 
 // 加载模板的系统调用文件

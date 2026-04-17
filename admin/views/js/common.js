@@ -134,11 +134,6 @@ function eb_confirm(id, property, token) {
             text = '重置组件？重置会丢失自定义的组件';
             delAlert(msg, text, url, token, '重置')
             break;
-        case 'plu':
-            url = 'plugin.php?action=del&plugin=' + id;
-            text = '删除该插件？';
-            delAlert(msg, text, url, token)
-            break;
         case 'media_sort':
             url = 'media.php?action=del_media_sort&id=' + id;
             text = '删除该资源分类？不会删除分类下资源文件';
