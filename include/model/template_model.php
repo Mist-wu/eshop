@@ -182,16 +182,4 @@ class Template_Model {
         }
     }
 
-    // upgrade callback
-    public function upCallback($tplName)
-    {
-        $callback_file = "../content/templates/$tplName/callback.php";
-        if (file_exists($callback_file)) {
-            require_once $callback_file;
-            if (function_exists('callback_up')) {
-                callback_up();
-            }
-        }
-    }
-
 }

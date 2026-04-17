@@ -527,37 +527,6 @@ $(function () {
         $('#checkAllItem').prop('checked', allChecked);
     });
 
-
-
-    // 应用商店：查看应用信息
-    $('#appModal').on('show.bs.modal', function (event) {
-        var button = $(event.relatedTarget);
-        var name = button.data('name');
-        var url = button.data('url');
-        var buy_url = button.data('buy-url');
-        var modal = $(this);
-
-        modal.find('.modal-body').empty();
-        modal.find('.modal-title').html(name);
-        modal.find('.modal-buy-url').attr('href', buy_url);
-
-        var loadingSpinner = '<div class="spinner-border text-primary ml-3"><span class="sr-only">Loading...</span></div>';
-        modal.find('.modal-title').append(loadingSpinner);
-
-        var iframe = $('<iframe>', {
-            'class': 'iframe-content',
-            'src': url,
-            'frameborder': 0
-        });
-
-        iframe.on('load', function () {
-            $('.spinner-border').remove();
-        });
-
-        modal.find('.modal-body').append(iframe);
-    });
-
-
     // 全选/取消全选
     $('#selectAll').on('change', function() {
         var isChecked = $(this).prop('checked');
