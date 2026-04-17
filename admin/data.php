@@ -13,6 +13,7 @@
 require_once 'globals.php';
 
 if (!$action) {
+    $br = '<a href="./">控制台</a><a href="./setting.php">系统管理</a><a><cite>数据</cite></a>';
     include View::getAdmView('header');
     require_once(View::getAdmView('data'));
     include View::getAdmView('footer');
