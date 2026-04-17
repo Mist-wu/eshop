@@ -1,16 +1,6 @@
 <?php
 
 
-function getMyEmkey(){
-    $db = Database::getInstance();
-    $db_prefix = DB_PREFIX;
-    $domain = getTopHost();
-    $sql = "select * from {$db_prefix}authorization where domain='{$domain}'";
-    $res = $db->once_fetch_array($sql);
-    $emkey =  empty($res) ? null : $res['emkey'];
-    return $emkey;
-}
-
 function isEmail($str) {
     // 使用PHP内置的过滤器验证邮箱
     return filter_var($str, FILTER_VALIDATE_EMAIL) !== false;
@@ -598,42 +588,6 @@ if (!function_exists('getUA')) {
     function getUA() {
         return isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '';
     }
-}
-/**
- * 获取当前顶级域名
- */
-function getTopHost() {
-    $domain = getDomain();
-    $domain = strtolower($domain);
-    $domain_parts = explode('.', $domain);
-    $count = count($domain_parts);
-    if ($count < 2) {
-        return $domain;
-    }
-    // 定义常见的双后缀域名列表
-    $doubleSuffixes = [
-        'com.em', 'eu.cc',
-        'co.uk', 'com.cn', 'org.cn', 'net.cn', 'gov.cn', 'ac.cn',
-        'eu.org', 'co.jp', 'com.au', 'org.uk', 'com.sg', 'co.nz',
-        'co.za', 'com.tw', 'com.hk', 'co.in', 'com.br', 'com.mx'
-    ];
-    // 检查最后两个部分是否是双后缀
-    if ($count >= 3) {
-        // 获取最后三部分组成的字符串（如：example.co.uk）
-        $lastThree = $domain_parts[$count-3] . '.' . $domain_parts[$count-2] . '.' . $domain_parts[$count-1];
-        // 获取最后两部分（如：co.uk）
-        $lastTwoParts = $domain_parts[$count-2] . '.' . $domain_parts[$count-1];
-        // 检查是否是双后缀
-        foreach ($doubleSuffixes as $suffix) {
-            // 直接比较最后两部分是否等于后缀
-            if ($lastTwoParts === $suffix) {
-                // 如果是双后缀，返回最后三部分
-                return $lastThree;
-            }
-        }
-    }
-    // 普通单后缀
-    return $domain_parts[$count-2] . '.' . $domain_parts[$count-1];
 }
 /**
  * 获取当前完整域名

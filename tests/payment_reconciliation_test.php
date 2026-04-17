@@ -18,7 +18,6 @@ $GLOBALS['test_cleanup_queries'] = 0;
 
 function addAction($hook, $callback) {}
 function doAction(...$args) {}
-function getTopHost() { return 'example.test'; }
 function getUA() { return $_SERVER['HTTP_USER_AGENT'] ?? ''; }
 function getIp() { return '127.0.0.1'; }
 function emMsg($msg, $url = '') {

@@ -123,9 +123,6 @@ defined('EM_ROOT') || exit('access denied!');
             <span class="template-count">共 <strong id="template-count">0</strong> 个模板</span>
         </div>
     </div>
-    <div id="checking-updates" style="display: none; padding: 10px; background-color: #f0f8ff; border: 1px solid #b3d9ff; border-radius: 4px; margin-bottom: 10px;">
-        <i class="layui-icon layui-icon-loading layui-anim layui-anim-rotate layui-anim-loop"></i> 正在检测模板是否有更新...
-    </div>
     <div class="template-table-wrap">
         <table class="layui-hide" id="index" lay-filter="index"></table>
     </div>
@@ -140,11 +137,7 @@ defined('EM_ROOT') || exit('access denied!');
 
 <script type="text/html" id="title">
     <div>
-        {{#  if(d.update == 'n'){ }}
         <span>{{ d.tplname }}</span>
-        {{#  } else { }}
-        <span><span class="layui-badge">发现新版本</span> {{ d.tplname }}</span>
-        {{#  } }}
     </div>
 </script>
 
@@ -157,9 +150,6 @@ defined('EM_ROOT') || exit('access denied!');
 
 <script type="text/html" id="operate">
     <div class="layui-clear-space">
-        {{#  if(d.update == 'y'){ }}
-        <a class="layui-btn layui-btn-blue" lay-event="update">更新版本</a>
-        {{#  } }}
         <a class="layui-btn" lay-event="setting">配置</a>
         <a class="layui-btn layui-btn-red" lay-event="del">删除</a>
 
@@ -189,7 +179,7 @@ defined('EM_ROOT') || exit('access denied!');
                 {field:'version', title:'版本号', width: 130, align: 'center' },
                 {field:'switch', title:'启用（电脑）', align: 'center', width: 180, templet: '#switch'},
                 {field:'tel_switch', title:'启用（手机）', align: 'center', width: 180, templet: '#tel_switch'},
-                {title:'操作', templet: '#operate', width: 250, align: 'left'}
+                {title:'操作', templet: '#operate', width: 180, align: 'left'}
             ]],
             done: function(res, curr, count){
                 var total = typeof count !== 'undefined' ? count : (res.data ? res.data.length : 0);
@@ -200,67 +190,6 @@ defined('EM_ROOT') || exit('access denied!');
                 console.log(res, msg)
             }
         });
-
-        // 异步检测模板更新
-        function checkTemplateUpdates() {
-            // 淡入显示正在检测更新的提示
-            $('#checking-updates').fadeIn();
-            
-            $.ajax({
-                url: '?action=checkUpdates',
-                type: 'GET',
-                dataType: 'json',
-                success: function(res) {
-                    // 更新表格中每个模板的更新状态
-                    updateTableWithUpdates(res.data);
-                },
-                error: function(xhr, status, error) {
-                    console.log('检测更新失败:', error);
-                },
-                complete: function() {
-                    // 无论成功或失败，都使用高度过渡隐藏检测更新的提示，避免表格突然上移
-                    $('#checking-updates').animate({
-                        height: 0,
-                        opacity: 0,
-                        paddingTop: 0,
-                        paddingBottom: 0,
-                        marginTop: 0,
-                        marginBottom: 0
-                    }, 400, function() {
-                        // 动画完成后完全隐藏元素
-                        $(this).hide();
-                    });
-                }
-            });
-        }
-
-        // 更新表格中模板的更新状态
-        function updateTableWithUpdates(updateData) {
-            // 获取当前表格数据
-            var tableData = table.cache['index'];
-            // 遍历更新数据，更新表格中对应模板的状态
-            updateData.forEach(function(updateItem) {
-                for(var i = 0; i < tableData.length; i++) {
-                    if(tableData[i].tplfile === updateItem.tplfile) {
-                        // 更新模板的更新状态
-                        tableData[i].update = updateItem.update;
-                        tableData[i].id = updateItem.id;
-                        
-                        // 更新指定行数据
-                        table.updateRow('index', {
-                            index: i,
-                            data: tableData[i],
-                            related: function(field, index){
-                                return true;
-                            }
-                        });
-                    }
-                }
-            });
-        }
-
-        // 表格渲染完成后，异步检测更新
-        checkTemplateUpdates();
 
         // 状态 - 开关操作
         form.on('switch(switch)', function(obj){
@@ -363,37 +292,6 @@ defined('EM_ROOT') || exit('access denied!');
                         ]
                     }
                 });
-            }
-            if(obj.event === 'update'){
-                var loadSwitch = layer.load(2);
-                $.ajax({
-                    url: '?action=upgrade',
-                    type: 'POST',
-                    dataType: 'json',
-                    data: { plugin_id: data.id, alias: data.tplfile, token: '<?= LoginAuth::genToken() ?>' },
-                    success: function(e) {
-                        if(e.code == 400){
-                            return layer.msg(e.msg)
-                        }
-                        layer.msg('更新成功');
-                        var newRow = data;
-                        newRow.update = 'n';
-                        table.updateRow('index', {
-                            index: obj.index,
-                            data: newRow,
-                            related: function(field, index){
-                                return true;
-                            }
-                        });
-                    },
-                    error: function(err) {
-                        layer.msg(err.responseJSON.msg);
-                    },
-                    complete: function() {
-                        layer.close(loadSwitch);
-                    }
-                });
-
             }
             if(obj.event === 'setting'){
                 let isMobile = window.innerWidth < 1200;

@@ -90,18 +90,6 @@ define('USER_TEMPLATE_PATH', EM_ROOT . '/user/views/');
 define('BLOG_TEMPLATE_PATH', EM_ROOT . '/content/blog/default/');
 define('COMMON_TEMPLATE_PATH', EM_ROOT . '/content/common/');
 
-const MSGCODE_EMKEY_INVALID = 1001;
-const MSGCODE_NO_UPUPDATE = 1002;
-const MSGCODE_SUCCESS = 200;
-
-const EM_LINE = [
-    ['name' => '官方线路', 'value' => 'https://emshop.ihehe.me/'],
-    ['name' => '备用线路', 'value' => 'http://154.44.8.63:10000/'],
-//    ['name' => '测试线路(无效)', 'value' => 'http://admin.em.cc/'],
-];
-$options_cache = $CACHE->readCache('options');
-define('CURRENT_LINE', empty($options_cache['em_line']) || empty(EM_LINE[$options_cache['em_line']]) ? 0 : $options_cache['em_line']);
-
 $active_plugins = Option::get('active_plugins');
 $emHooks = [];
 require_once EM_ROOT . '/include/lib/yifut.php';
@@ -135,10 +123,7 @@ if (defined('DEMO') && DEMO === true) {
         exit('演示站点无法进行该操作！');
     }
     if($method == 'POST'){
-        if($action != 'check_update'){
-            output::error('演示站点无法进行该操作！');
-        }
-
+        output::error('演示站点无法进行该操作！');
     }
 
 }
@@ -151,14 +136,10 @@ TplOptions::getInstance()->init();
 if(defined('DEMO_MODE') && DEMO_MODE === true && $_SERVER['REQUEST_METHOD'] === 'POST'){
     $action = Input::getStrVar('action');
     $allow = [
-        'dosignin', 'goods_price_stock', 'upgrade'
+        'dosignin', 'goods_price_stock'
     ];
     if(!in_array($action, $allow)){
-        if($action === 'update' && basename($_SERVER['PHP_SELF']) === 'upgrade.php'){
-            // 允许 upgrade.php 的 update 操作
-        } else {
-            Ret::error('当前演示站禁止该操作');
-        }
+        Ret::error('当前演示站禁止该操作');
     }
 
 }
