@@ -5,7 +5,13 @@ Dockerfile
 # config.php
 /content/backup/*.sql
 /content/cache/*
+/content/em_temp/*
+/content/log/*
 /content/uploadfile/*
+/test-results/
+/playwright-report/
+/coverage/
+/.phpunit.result.cache
 
 # IDE
 .project
@@ -19,7 +25,10 @@ Dockerfile
 ._*
 __MACOSX/
 .env
+.env.*
 !.env.example
+AGENTS.md
+AGENTS.local.md
 
 # docker
 db_data/*

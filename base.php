@@ -5,4 +5,4 @@
  */
 
 // 在线更新服务
-const SERVICE_TOKEN = '';
+define('SERVICE_TOKEN', getenv('EM_SERVICE_TOKEN') ?: '');
