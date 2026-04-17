@@ -9,7 +9,7 @@
  *   $sku_data - 已有的 SKU 数据，以 sku 字符串为键
  *   $spec_names - 规格属性名称数组 ['颜色', '尺码']
  *
- * @package EMSHOP
+ * @package ESHOP
  */
 
 $sku_combinations = isset($sku_combinations) ? $sku_combinations : [];

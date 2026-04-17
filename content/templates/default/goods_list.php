@@ -74,7 +74,7 @@ if (empty($homeBulletin)) {
 }
 
 if (empty($homeBulletin)) {
-    $homeBulletin = '<p>本站使用 EMSHOP 免费开源程序搭建，此处公告内容配置请前往后台面板 - 外观管理 - 模板管理处配置</p>';
+    $homeBulletin = '<p>本站使用 ESHOP 免费开源程序搭建，此处公告内容配置请前往后台面板 - 外观管理 - 模板管理处配置</p>';
 }
 
 $topNotice = $homeBulletin;

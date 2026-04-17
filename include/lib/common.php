@@ -1433,7 +1433,7 @@ function emFetchFile($source) {
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Referer: ' . EM_URL,
             'Emkey: ' . $emkey,
-            'User-Agent: emshop ' . Option::EM_VERSION
+            'User-Agent: eshop ' . Option::EM_VERSION
         ]);
         $result = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -1523,7 +1523,7 @@ function set_ctx_option() {
             'method'  => 'GET',
             'header'  => "Referer: " . EM_URL . "\r\n"
                 . "Emkey: " . $emkey . "\r\n"
-                . "User-Agent: emshop " . Option::EM_VERSION . "\r\n",
+                . "User-Agent: eshop " . Option::EM_VERSION . "\r\n",
         ],
         "ssl"  => [
             "verify_peer"      => false,

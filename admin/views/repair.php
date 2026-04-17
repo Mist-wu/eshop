@@ -281,7 +281,7 @@
             <div class="repair-hero">
                 <div class="repair-icon"><i class="fa fa-wrench"></i></div>
                 <div>
-                    <div class="repair-title">EMSHOP 修复中心</div>
+                    <div class="repair-title">ESHOP 修复中心</div>
                     <div class="repair-subtitle">系统修复会自动按步骤执行，过程中请勿关闭页面或刷新。</div>
                     <div class="repair-tip">
                         <i class="fa fa-info-circle"></i>
@@ -293,7 +293,7 @@
             </div>
 
             <div class="repair-actions">
-                <button type="button" id="repair-start-btn" class="layui-btn layui-btn-lg">开始修复EMSHOP程序</button>
+                <button type="button" id="repair-start-btn" class="layui-btn layui-btn-lg">开始修复ESHOP程序</button>
                 <span id="repair-state" class="repair-state">待开始</span>
             </div>
 
@@ -569,7 +569,7 @@
                         isProgramReady = true;
                         setLoadState('success', '修复程序加载成功', '修复模块已就绪，可以开始修复。');
                         $repairBody.stop(true, true).slideDown(200);
-                        $startBtn.prop('disabled', false).removeClass('layui-btn-disabled').text('开始修复EMSHOP程序');
+                        $startBtn.prop('disabled', false).removeClass('layui-btn-disabled').text('开始修复ESHOP程序');
                         setState('', '待开始');
                         return;
                     }

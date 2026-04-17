@@ -1,4 +1,4 @@
-# emshop
+# eshop
 
 快速稳定的轻量级 PHP 虚拟商城系统。
 

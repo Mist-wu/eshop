@@ -1,6 +1,6 @@
 <?php
 /**
- * @package EMSHOP
+ * @package ESHOP
  */
 
 class Pay_Controller {

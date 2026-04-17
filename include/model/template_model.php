@@ -48,7 +48,7 @@ class Template_Model {
         $nonce_template = Option::get('nonce_templet');
 
         $templates = [];
-        $handle = @opendir(TPLS_PATH) or die('emshop template path error!');
+        $handle = @opendir(TPLS_PATH) or die('eshop template path error!');
         while ($file = @readdir($handle)) {
             if (!file_exists(TPLS_PATH . $file . '/header.php')) {
                 continue;

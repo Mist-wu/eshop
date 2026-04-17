@@ -6,7 +6,7 @@
  * 所需变量:
  *   $specs - 规格数据数组 [{id, title, options: [{id, title}], value: [已选中的ID]}]
  *
- * @package EMSHOP
+ * @package ESHOP
  */
 
 $specs = isset($specs) ? $specs : [];

@@ -2,7 +2,7 @@
 /**
  * 通用卡密库存管理 API
  *
- * @package EMSHOP
+ * @package ESHOP
  */
 
 require_once '../../../init.php';

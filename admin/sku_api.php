@@ -1,7 +1,7 @@
 <?php
 /**
  * SKU API - 商品规格统一接口
- * @package EMSHOP
+ * @package ESHOP
  */
 
 require_once 'globals.php';

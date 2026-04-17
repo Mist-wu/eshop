@@ -7,7 +7,7 @@
  *   $price_fields - 价格字段定义数组
  *   $sku_data - 已有的 SKU 数据（可选）
  *
- * @package EMSHOP
+ * @package ESHOP
  */
 
 $price_fields = isset($price_fields) ? $price_fields : [];

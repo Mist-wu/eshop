@@ -5,7 +5,7 @@
  * 用法:
  *   EmSku.init({ goods_id: 123, type_id: 0 });
  *
- * @package EMSHOP
+ * @package ESHOP
  */
 const EmSku = (function() {
     'use strict';

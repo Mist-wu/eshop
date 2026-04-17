@@ -1,7 +1,7 @@
 <?php
 /**
  * View control
- * @package EMSHOP
+ * @package ESHOP
  */
 
 class View {

@@ -1,7 +1,7 @@
 <?php
 
 /**
- * EMSHOP
+ * ESHOP
  */
 
 require_once 'globals.php';

@@ -1,7 +1,7 @@
 <?php
 /**
  * 会员等级管理
- * @package EMSHOP
+ * @package ESHOP
  */
 
 /**

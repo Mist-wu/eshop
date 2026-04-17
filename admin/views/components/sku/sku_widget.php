@@ -9,7 +9,7 @@
  *   $sku_goods_type = $goods['type'] ?? '';
  *   include View::getAdmView('components/sku/sku_widget');
  *
- * @package EMSHOP
+ * @package ESHOP
  */
 
 $sku_goods_id = isset($sku_goods_id) ? (int)$sku_goods_id : 0;

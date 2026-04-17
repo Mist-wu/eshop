@@ -1,7 +1,7 @@
 <?php
 /**
  * global
- * @package EMSHOP
+ * @package ESHOP
  */
 
 /**

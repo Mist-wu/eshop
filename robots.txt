@@ -1,5 +1,5 @@
 #
-# robots.txt for emshop
+# robots.txt for eshop
 #
 
 User-agent: *

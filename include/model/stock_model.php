@@ -6,7 +6,7 @@
  * - em_stock: 卡密库存表
  * - em_stock_usage: 卡密使用记录表
  *
- * @package EMSHOP
+ * @package ESHOP
  */
 
 class Stock_Model {
