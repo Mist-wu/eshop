@@ -6,9 +6,9 @@ header('Content-Type: text/html; charset=UTF-8');
 const EM_ROOT = __DIR__;
 
 require_once EM_ROOT . '/config.php';
-require_once EM_ROOT . '/base.php';
 require_once EM_ROOT . '/include/lib/env.php';
 emLoadEnv();
+require_once EM_ROOT . '/base.php';
 require_once EM_ROOT . '/include/lib/common.php';
 
 
