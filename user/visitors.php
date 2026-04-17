@@ -14,14 +14,22 @@ function emVisitorEnsureSession() {
 }
 
 function emVisitorAuthorizedOrderSessionKey() {
-    return 'emshop_visitor_authorized_orders';
+    return 'eshop_visitor_authorized_orders';
+}
+
+function emVisitorLegacyAuthorizedOrderSessionKey() {
+    return substr_replace(emVisitorAuthorizedOrderSessionKey(), 'm', 1, 0);
 }
 
 function emVisitorGetAuthorizedOrders() {
     emVisitorEnsureSession();
 
     $key = emVisitorAuthorizedOrderSessionKey();
+    $legacyKey = emVisitorLegacyAuthorizedOrderSessionKey();
     $current = isset($_SESSION[$key]) && is_array($_SESSION[$key]) ? $_SESSION[$key] : [];
+    if (empty($current) && isset($_SESSION[$legacyKey]) && is_array($_SESSION[$legacyKey])) {
+        $current = $_SESSION[$legacyKey];
+    }
     $now = time();
     $authorized = [];
 
@@ -39,6 +47,7 @@ function emVisitorGetAuthorizedOrders() {
     }
 
     $_SESSION[$key] = $authorized;
+    unset($_SESSION[$legacyKey]);
     return $authorized;
 }
 
