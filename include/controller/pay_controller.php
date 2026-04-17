@@ -286,8 +286,12 @@ class Pay_Controller {
     private function getAuthorizedVisitorOrders() {
         $this->ensureVisitorSession();
 
-        $key = 'emshop_visitor_authorized_orders';
+        $key = 'eshop_visitor_authorized_orders';
+        $legacyKey = substr_replace($key, 'm', 1, 0);
         $current = isset($_SESSION[$key]) && is_array($_SESSION[$key]) ? $_SESSION[$key] : [];
+        if (empty($current) && isset($_SESSION[$legacyKey]) && is_array($_SESSION[$legacyKey])) {
+            $current = $_SESSION[$legacyKey];
+        }
         $now = time();
         $authorized = [];
 
@@ -306,6 +310,7 @@ class Pay_Controller {
         }
 
         $_SESSION[$key] = $authorized;
+        unset($_SESSION[$legacyKey]);
         return $authorized;
     }
 
