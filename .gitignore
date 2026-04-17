@@ -12,6 +12,7 @@ Dockerfile
 /playwright-report/
 /coverage/
 /.phpunit.result.cache
+/_codex_backup_*
 
 # IDE
 .project
