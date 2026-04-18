@@ -378,9 +378,9 @@ if ($action == 'mail_test') {
     $mail->From = $data['smtp_mail'];
     $mail->FromName = $data['smtp_from_name'];
     $mail->AddAddress($data['testTo']);
-    $mail->Subject = 'ESHOP测试邮件';
+    $mail->Subject = 'eshop测试邮件';
     $mail->isHTML();
-    $mail->Body = Notice::getMailTemplate('测试ESHOP邮件发送');
+    $mail->Body = Notice::getMailTemplate('测试eshop邮件发送');
 
     try {
         $res = $mail->Send();
