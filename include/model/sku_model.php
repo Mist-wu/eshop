@@ -1,8 +1,7 @@
 <?php
 /**
  * article sort model
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 class Sku_Model {

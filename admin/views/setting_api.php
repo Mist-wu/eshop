@@ -42,7 +42,7 @@
             4. 微语列表<br>
             5. 资源文件上传<br>
             ……<br><br>
-            详见接口文档：<a href="https://www.emlog.net/docs/#/api" target="_blank">API接口文档→</a>
+            当前请以本页列出的接口与实际路由为准。
         </div>
     </div>
 </div>

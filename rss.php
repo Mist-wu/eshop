@@ -1,8 +1,7 @@
 <?php
 /**
  * RSS
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 require_once './init.php';

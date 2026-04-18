@@ -1,8 +1,7 @@
 <?php
 /**
  * tags model
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 class Tag_Model {

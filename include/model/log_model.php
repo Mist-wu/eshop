@@ -2,8 +2,7 @@
 /**
  * article and page model
  *
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 class Log_Model {

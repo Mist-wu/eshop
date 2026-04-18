@@ -270,7 +270,7 @@ $maxQtyAttr = $maxQty > 0 ? 'max="' . $maxQty . '"' : '';
 
 
     <div class="card" style="padding: 15px;">
-        <div class="markdown intro" id="emlogEchoLog"><?= $goods['content'] ?></div>
+        <div class="markdown intro" id="eshopEchoLog"><?= $goods['content'] ?></div>
     </div>
 
 

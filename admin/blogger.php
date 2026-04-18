@@ -2,8 +2,7 @@
 /**
  * user profile
  *
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 /**

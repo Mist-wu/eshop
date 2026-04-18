@@ -2,8 +2,7 @@
 /**
  * Service: Field
  *
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 class Field {

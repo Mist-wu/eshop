@@ -628,7 +628,7 @@ function realUrl() {
         return $real_url;
     }
 
-    $emlog_path = EM_ROOT . DIRECTORY_SEPARATOR;
+    $eshop_path = EM_ROOT . DIRECTORY_SEPARATOR;
     $script_path = pathinfo($_SERVER['SCRIPT_NAME'], PATHINFO_DIRNAME);
     $script_path = str_replace('\\', '/', $script_path);
     $path_element = explode('/', $script_path);
@@ -639,7 +639,7 @@ function realUrl() {
     $max_deep = count($path_element);
     while ($current_deep < $max_deep) {
         $this_match = $this_match . $path_element[$current_deep] . DIRECTORY_SEPARATOR;
-        if (substr($emlog_path, strlen($this_match) * (-1)) === $this_match) {
+        if (substr($eshop_path, strlen($this_match) * (-1)) === $this_match) {
             $best_match = $this_match;
         }
         $current_deep++;

@@ -2,8 +2,7 @@
 /**
  * search
  *
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 class Search_Controller {

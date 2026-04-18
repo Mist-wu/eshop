@@ -1,8 +1,7 @@
 <?php
 /**
  * Captcha
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 if (!isset($_SESSION)) {

@@ -1,8 +1,7 @@
 <?php
 /**
  * router
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 class Dispatcher {

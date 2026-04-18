@@ -1,8 +1,7 @@
 <?php
 /**
  * commment model
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 class Comment_Model {

@@ -46,7 +46,7 @@
         <div class="card-body">
             <form action="data.php?action=import" enctype="multipart/form-data" method="post">
                 <div id="import">
-                    <p class="des">仅可导入相同版本emlog的数据库备份文件，且数据库表前缀需保持一致。<br/>当前数据库表前缀：<?= DB_PREFIX ?></p>
+                    <p class="des">仅可导入当前系统兼容且与当前版本匹配的数据库备份文件，且数据库表前缀需保持一致。<br/>当前数据库表前缀：<?= DB_PREFIX ?></p>
                     <p>
                         <input name="token" id="token" value="<?= LoginAuth::genToken() ?>" type="hidden"/>
                         <input type="file" name="sqlfile" required/>

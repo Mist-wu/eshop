@@ -2,10 +2,10 @@
 /*
 Template Name:默认模板
 Version:1.2.1
-Template Url:https://www.emlog.net/template/detail/1167
-Description:EMLOG的系统默认模板
-Author:emlog
-Author Url:https://www.emlog.net/author/index/577
+Template Url:https://www.bupt8.com/
+Description:eshop 的默认博客模板
+Author:eshop
+Author Url:https://www.bupt8.com/
 */
 
 defined('EM_ROOT') || exit('access denied!');

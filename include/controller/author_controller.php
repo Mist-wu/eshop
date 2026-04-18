@@ -2,8 +2,7 @@
 /**
  * author's articles
  *
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 class Author_Controller {

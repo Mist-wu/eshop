@@ -14,7 +14,7 @@ defined('EM_ROOT') || exit('access denied!');
         <span class="m-r-5">阅读：<?= $views ?></span>
     </p>
     <hr class="bottom-5" />
-    <div class="markdown" id="emlogEchoLog"><?= $log_content ?></div>
+    <div class="markdown" id="eshopEchoLog"><?= $log_content ?></div>
 
     <?php doAction('log_related', $logData) ?>
 

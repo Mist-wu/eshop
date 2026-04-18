@@ -2,8 +2,7 @@
 /**
  * Database operation routing (only compatible with old version, not recommended)
  *
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 class MySql {

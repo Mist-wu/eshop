@@ -1,8 +1,7 @@
 <?php
 /**
  * data backup
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 /**
@@ -27,7 +26,7 @@ if ($action === 'backup') {
     $DB = Database::getInstance();
     $tables = $DB->listTables();
 
-    $bakfname = 'emlog_' . date('Ymd') . '_' . substr(md5(AUTH_KEY . uniqid('', true)), 0, 18);
+    $bakfname = 'eshop_' . date('Ymd') . '_' . substr(md5(AUTH_KEY . uniqid('', true)), 0, 18);
     $filename = '';
     $sqldump = '';
 
@@ -35,13 +34,13 @@ if ($action === 'backup') {
         $sqldump .= exportData($table);
     }
 
-    $dumpfile = '#version:emlog ' . Option::EM_VERSION . "\n";
+    $dumpfile = '#version:eshop ' . Option::EM_VERSION . "\n";
     $dumpfile .= '#date:' . date('Y-m-d H:i') . "\n";
     $dumpfile .= '#tableprefix:' . DB_PREFIX . "\n";
     $dumpfile .= $sqldump;
     $dumpfile .= "\n#the end of backup";
 
-    $filename = 'emlog_' . Option::EM_VERSION . '_' . date('Ymd_His');
+    $filename = 'eshop_' . Option::EM_VERSION . '_' . date('Ymd_His');
     if ($zipbak == 'y') {
         if (($dumpfile = emZip($filename . '.sql', $dumpfile)) === false) {
             emDirect('./data.php?error_f=1');
@@ -86,10 +85,10 @@ if ($action === 'import') {
         }
         $sqlfile['tmp_name'] = dirname($sqlfile['tmp_name']) . '/' . str_replace('.zip', '.sql', $sqlfile['name']);
         if (!file_exists($sqlfile['tmp_name'])) {
-            emMsg('只能导入emlog备份的压缩包，且不能修改压缩包文件名！');
+            emMsg('只能导入本站导出的压缩备份文件，且不能修改压缩包文件名！');
         }
     } elseif (getFileSuffix($sqlfile['name']) != 'sql') {
-        emMsg('只能导入emlog备份的SQL文件');
+        emMsg('只能导入本站导出的 SQL 备份文件');
     }
     checkSqlFileInfo($sqlfile['tmp_name']);
     importData($sqlfile['tmp_name']);
@@ -152,16 +151,16 @@ function checkSqlFileInfo($sqlfile) {
     }
     fclose($fp);
     if (empty($dumpinfo)) {
-        emMsg('该文件不是emlog的数据备份文件');
+        emMsg('该文件不是本站的数据备份文件');
     }
 
-    if (preg_match("/pro\s\d+\.\d+\.\d+/", $dumpinfo[0], $matches)) {
-        $v = $matches[0];
-        if ($v !== Option::EM_VERSION) {
-            emMsg('不是生成的数据备份，请安装 emlog ' . $v . ' 导入。');
-        }
-    } else {
-        emMsg('该文件不是 emlog pro 的数据备份文件');
+    if (!preg_match('/^#version:(?:eshop|emlog)\s+(.+)$/i', trim($dumpinfo[0]), $matches)) {
+        emMsg('该文件不是当前系统兼容的数据备份文件');
+    }
+
+    $v = trim($matches[1]);
+    if ($v !== Option::EM_VERSION) {
+        emMsg('不是当前版本生成的数据备份，请安装对应版本 ' . $v . ' 后导入。');
     }
 
     if (preg_match('/#tableprefix:' . DB_PREFIX . '/', $dumpinfo[2]) === 0) {

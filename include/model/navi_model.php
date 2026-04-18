@@ -1,8 +1,7 @@
 <?php
 /**
  * navi model
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 class Navi_Model {

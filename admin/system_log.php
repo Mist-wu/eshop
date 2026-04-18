@@ -1,7 +1,7 @@
 <?php
 /**
  * System log viewer
- * @package EMLOG
+ * @package ESHOP
  */
 
 require_once 'globals.php';

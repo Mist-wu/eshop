@@ -1,8 +1,7 @@
 <?php
 /**
  * links model
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 class Link_Model {

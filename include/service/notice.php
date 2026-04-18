@@ -3,8 +3,7 @@
 /**
  * Service: Notice
  *
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 class Notice {

@@ -3,8 +3,7 @@
 /**
  * log field model
  *
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 class Log_Field_Model

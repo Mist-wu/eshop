@@ -2,8 +2,7 @@
 /**
  * The productf management
  *
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 /**

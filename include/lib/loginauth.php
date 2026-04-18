@@ -1,8 +1,7 @@
 <?php
 /**
  * Login authentication
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 class LoginAuth {

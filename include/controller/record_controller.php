@@ -2,8 +2,7 @@
 /**
  * Article archiving
  *
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 class Record_Controller {

@@ -1,8 +1,7 @@
 <?php
 /**
  * media model
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 class Media_Model {

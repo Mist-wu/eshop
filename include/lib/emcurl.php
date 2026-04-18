@@ -2,12 +2,11 @@
 /**
  * curl wrapper class
  *
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 class EmCurl {
-    protected $_useragent = 'emlog ';
+    protected $_useragent = 'eshop ';
     protected $_url;
     protected $_followlocation = false;
     protected $_timeout;

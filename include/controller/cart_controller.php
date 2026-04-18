@@ -2,8 +2,7 @@
 /**
  * homepage & article detail
  *
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 class Cart_Controller {

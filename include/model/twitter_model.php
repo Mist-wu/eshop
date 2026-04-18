@@ -2,8 +2,7 @@
 /**
  * notes model
  *
- * @package EMLOG
- * @link https://www.emlog.net
+ * @package ESHOP
  */
 
 class Twitter_Model {
