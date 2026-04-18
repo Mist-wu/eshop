@@ -18,10 +18,12 @@ $Sort_Model = new Sort_Model();
 $User_Model = new User_Model();
 $MediaSort_Model = new MediaSort_Model();
 $Template_Model = new Template_Model();
+new Coupon_Model();
 
 // 订单列表
 if (empty($action)) {
     $page = Input::getIntVar('page', 1);
+    $defaultPromoterUid = Input::getIntVar('promoter_uid', 0);
 
 
 
@@ -52,6 +54,7 @@ if ($action == 'index') {
     $where['client_ip'] = Input::getStrVar('client_ip');
     $where['pay_status'] = Input::getStrVar('pay_status');
     $where['create_time'] = Input::getStrVar('create_time');
+    $where['promoter_uid'] = Input::getIntVar('promoter_uid', 0);
 
     $orderNum = $orderModel->getOrderNum($where);
     $orderTotalAmount = $orderModel->getOrderTotalAmount($where);

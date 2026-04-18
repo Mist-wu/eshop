@@ -106,7 +106,7 @@ if($action == 'detail'){
     $func = "orderDetail" . ucfirst($goods['type']);
 
     include View::getUserView('_header');
-    $func($goods, $order, $child_order);
+    $func($order, $child_order, $goods);
     include View::getUserView('_footer');
     View::output();
 }

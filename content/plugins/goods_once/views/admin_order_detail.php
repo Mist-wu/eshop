@@ -20,6 +20,9 @@ if (empty($user) && !empty($order['user_id'])) {
 }
 
 $attrSpec = $child_order['attr_spec'] ?? '';
+if (in_array($goods['type'] ?? '', ['em_auto', 'em_manual']) && function_exists('emFormatSkuOptionIds')) {
+    $attrSpec = emFormatSkuOptionIds($child_order['goods_id'], $child_order['sku'] ?? '');
+}
 $attrSpec = $attrSpec ?: '默认规格';
 
 $attachText = '';
@@ -457,6 +460,7 @@ layui.use(['layer'], function() {
     var layer = layui.layer;
 
     var allSecrets = <?= json_encode($secretContents, JSON_UNESCAPED_UNICODE) ?>;
+    var downloadUrl = <?= json_encode(EM_URL . '?plugin=goods_once&action=download&out_trade_no=' . rawurlencode($order['out_trade_no'] ?? ''), JSON_UNESCAPED_UNICODE) ?>;
 
     function copyToClipboard(text) {
         return new Promise(function(resolve, reject) {
@@ -508,21 +512,11 @@ layui.use(['layer'], function() {
     var downloadBtn = document.getElementById('downloadBtn');
     if (downloadBtn) {
         downloadBtn.addEventListener('click', function() {
-            if (!allSecrets.length) {
-                layer.msg('暂无可下载内容');
+            if (!downloadUrl) {
+                layer.msg('下载地址无效');
                 return;
             }
-            var content = allSecrets.join('\r\n');
-            var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-            var url = window.URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url;
-            var filenameSeed = <?= json_encode($order['out_trade_no'] ?? 'order', JSON_UNESCAPED_UNICODE) ?>;
-            a.download = '卡密_' + filenameSeed + '.txt';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
+            window.location.href = downloadUrl;
             layer.msg('下载已开始');
         });
     }

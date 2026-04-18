@@ -496,6 +496,9 @@
             <li id="menu-order-user">
                 <a href="/user/order.php"><i class="fa fa-list-ul"></i><cite>订单列表</cite></a>
             </li>
+            <li id="menu-promotion">
+                <a href="/user/promotion.php"><i class="fa fa-bullhorn"></i><cite>推广中心</cite></a>
+            </li>
             <li id="menu-order-visitors">
                 <a href="/user/visitors.php"><i class="fa fa-search"></i><cite>游客查单</cite></a>
             </li>

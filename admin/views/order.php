@@ -1,5 +1,6 @@
 <?php
 defined('EM_ROOT') || exit('access denied!');
+$defaultPromoterUid = isset($defaultPromoterUid) ? (int)$defaultPromoterUid : 0;
 ?>
 <style>
 .order-search-wrapper {
@@ -115,7 +116,7 @@ defined('EM_ROOT') || exit('access denied!');
                 <i class="fa fa-filter"></i>搜索条件
             </div>
             <div class="layui-colla-content">
-                <form class="layui-form order-search-form" id="search-form-content">
+                <form class="layui-form order-search-form" id="search-form-content" lay-filter="search-form-content">
                     <div class="grid-cols-xs-1 grid-cols-sm-2 grid-cols-md-3 grid-cols-lg-4 grid-cols-xl-5 grid-gap-15">
                         <div class="layui-form-item">
                             <label class="layui-form-label">订单号</label>
@@ -133,6 +134,12 @@ defined('EM_ROOT') || exit('access denied!');
                             <label class="layui-form-label">用户信息</label>
                             <div class="layui-input-block">
                                 <input type="text" value="" name="email_username" placeholder="邮箱/昵称/手机" lay-affix="clear" class="layui-input">
+                            </div>
+                        </div>
+                        <div class="layui-form-item">
+                            <label class="layui-form-label">推广者UID</label>
+                            <div class="layui-input-block">
+                                <input type="number" min="1" step="1" value="<?= $defaultPromoterUid > 0 ? $defaultPromoterUid : '' ?>" name="promoter_uid" placeholder="请输入推广者用户ID" lay-affix="clear" class="layui-input">
                             </div>
                         </div>
                         <div class="layui-form-item">
@@ -290,6 +297,11 @@ defined('EM_ROOT') || exit('access denied!');
         var form = layui.form;
         var element = layui.element;
         var laydate = layui.laydate;
+        var initialWhere = {};
+        var defaultPromoterUid = <?= $defaultPromoterUid ?>;
+        if (defaultPromoterUid > 0) {
+            initialWhere.promoter_uid = defaultPromoterUid;
+        }
 
         // 初始化日期范围选择器
         laydate.render({
@@ -310,6 +322,7 @@ defined('EM_ROOT') || exit('access denied!');
             lineStyle: 'height: 69px;',
             page: true,
             defaultToolbar: [],
+            where: initialWhere,
 
 
             cols: [[
@@ -600,12 +613,12 @@ defined('EM_ROOT') || exit('access denied!');
 
             // 尽管我们的 table 自带排序功能，但并没有请求服务端。
             // 有些时候，你可能需要根据当前排序的字段，重新向后端发送请求，从而实现服务端排序，如：
+            var currentFilters = form.val('search-form-content') || {};
+            currentFilters.field = obj.field;
+            currentFilters.order = obj.type;
             table.reload('index', {
                 initSort: obj, // 记录初始排序，如果不设的话，将无法标记表头的排序状态。
-                where: { // 请求参数（注意：这里面的参数可任意定义，并非下面固定的格式）
-                    field: obj.field, // 排序字段
-                    order: obj.type // 排序方式
-                }
+                where: currentFilters
             });
         });
 
