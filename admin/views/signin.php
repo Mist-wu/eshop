@@ -323,7 +323,7 @@
         <div class="icon-box">
             <i class="fa fa-user"></i>
         </div>
-        <h1><?= Option::get('blogname') ?></h1>
+        <h1><?= strcasecmp((string) Option::get('blogname'), 'eshop') === 0 ? 'ESHOP' : Option::get('blogname') ?></h1>
         <p>登录到管理后台</p>
     </div>
 

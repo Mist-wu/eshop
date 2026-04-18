@@ -1,4 +1,9 @@
-<?php defined('EM_ROOT') || exit('access denied!'); ?>
+<?php
+defined('EM_ROOT') || exit('access denied!');
+
+$blogname = (string) Option::get('blogname');
+$admin_brand_name = strcasecmp($blogname, 'eshop') === 0 ? strtoupper($blogname) : $blogname;
+?>
 <!doctype html>
 <html lang="zh-cn">
 <head>
@@ -234,7 +239,7 @@
 
     <nav class="menu-container" id="left-menu">
         <a class="logo" href="<?= EM_URL ?>admin">
-            <?= Option::get('blogname') ?>
+            <?= $admin_brand_name ?>
         </a>
         <!-- 菜单搜索框 -->
         <div class="menu-search-box">

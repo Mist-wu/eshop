@@ -42,6 +42,8 @@ $normalizeAssetUrl = static function ($path) {
 
 $favicon = empty($home_icon) ? (empty(_g('favicon')) ? EM_URL . 'favicon.ico' : $normalizeAssetUrl(_g('favicon'))) : $normalizeAssetUrl($home_icon);
 $logo = $normalizeAssetUrl(Option::get('logo'));
+$brand_name = isset($blogname) ? (string) $blogname : '';
+$header_brand_name = strcasecmp($brand_name, 'eshop') === 0 ? strtoupper($brand_name) : $brand_name;
 
 $can_login = Option::get('login_switch') == 'y';
 $can_register = Option::get('register_switch') == 'y';
@@ -98,7 +100,7 @@ if ($is_user_login) {
                 <?php if (empty($logo)): ?>
                 <h1 class="logo-text">
                     <a href="<?= EM_URL ?>" title="<?= $blogname ?>">
-                        <span id="light-logo"><?= $blogname ?></span>
+                        <span id="light-logo"><?= $header_brand_name ?></span>
                     </a>
                 </h1>
                 <?php else: ?>

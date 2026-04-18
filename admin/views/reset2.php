@@ -266,7 +266,7 @@
         <div class="icon-box">
             <i class="fa fa-key"></i>
         </div>
-        <h1><?= Option::get('blogname') ?></h1>
+        <h1><?= strcasecmp((string) Option::get('blogname'), 'eshop') === 0 ? 'ESHOP' : Option::get('blogname') ?></h1>
         <p>找回密码：重置密码</p>
     </div>
 
