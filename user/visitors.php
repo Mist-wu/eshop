@@ -14,14 +14,22 @@ function emVisitorEnsureSession() {
 }
 
 function emVisitorAuthorizedOrderSessionKey() {
-    return 'emshop_visitor_authorized_orders';
+    return 'eshop_visitor_authorized_orders';
+}
+
+function emVisitorLegacyAuthorizedOrderSessionKey() {
+    return substr_replace(emVisitorAuthorizedOrderSessionKey(), 'm', 1, 0);
 }
 
 function emVisitorGetAuthorizedOrders() {
     emVisitorEnsureSession();
 
     $key = emVisitorAuthorizedOrderSessionKey();
+    $legacyKey = emVisitorLegacyAuthorizedOrderSessionKey();
     $current = isset($_SESSION[$key]) && is_array($_SESSION[$key]) ? $_SESSION[$key] : [];
+    if (empty($current) && isset($_SESSION[$legacyKey]) && is_array($_SESSION[$legacyKey])) {
+        $current = $_SESSION[$legacyKey];
+    }
     $now = time();
     $authorized = [];
 
@@ -39,6 +47,7 @@ function emVisitorGetAuthorizedOrders() {
     }
 
     $_SESSION[$key] = $authorized;
+    unset($_SESSION[$legacyKey]);
     return $authorized;
 }
 
@@ -335,11 +344,7 @@ if($action == 'visitors_search_order'){
         ];
 
         // 处理规格信息
-        if (in_array($goods['type'] ?? '', ['em_auto', 'em_manual']) && function_exists('emFormatSkuOptionIds')) {
-            $order_item['attr_spec'] = emFormatSkuOptionIds($row['goods_id'], $row['sku'] ?? '');
-        } else {
-            $order_item['attr_spec'] = empty($row['attr_spec']) ? '默认规格' : $row['attr_spec'];
-        }
+        $order_item['attr_spec'] = empty($row['attr_spec']) ? '默认规格' : $row['attr_spec'];
 
         // 处理附加选项
         $_text = empty($row['attach_user']) ? [] : json_decode($row['attach_user'], true);

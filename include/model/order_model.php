@@ -318,20 +318,33 @@ class Order_Model {
             return 0;
         }
 
+        $timestamp = time();
+        $this->db->query("UPDATE {$this->db_prefix}coupon_usage SET status = 1, update_time = {$timestamp} WHERE order_id = {$order_id} AND status = 0");
+        return (int)$this->db->affected_rows();
+    }
+
+    public function releaseCouponUsage($orderIds) {
+        $orderIds = $this->normalizeOrderIds($orderIds);
+        if (empty($orderIds)) {
+            return 0;
+        }
+
+        $idsStr = implode(',', $orderIds);
+        $timestamp = time();
         $rows = $this->db->fetch_all(
             "SELECT coupon_id, COUNT(*) AS total
              FROM {$this->db_prefix}coupon_usage
-             WHERE order_id = {$order_id} AND status = 0
+             WHERE order_id IN ({$idsStr}) AND status = 0
              GROUP BY coupon_id"
         );
+
         if (empty($rows)) {
             return 0;
         }
 
-        $timestamp = time();
-        $this->db->query("UPDATE {$this->db_prefix}coupon_usage SET status = 1, update_time = {$timestamp} WHERE order_id = {$order_id} AND status = 0");
-        $confirmed = (int)$this->db->affected_rows();
-        if ($confirmed < 1) {
+        $this->db->query("UPDATE {$this->db_prefix}coupon_usage SET status = -1, update_time = {$timestamp} WHERE order_id IN ({$idsStr}) AND status = 0");
+        $released = (int)$this->db->affected_rows();
+        if ($released < 1) {
             return 0;
         }
 
@@ -343,26 +356,13 @@ class Order_Model {
             }
             $this->db->query(
                 "UPDATE {$this->db_prefix}coupon
-                 SET used_times = used_times + {$total},
+                 SET used_times = CASE WHEN used_times >= {$total} THEN used_times - {$total} ELSE 0 END,
                      update_time = {$timestamp}
                  WHERE id = {$couponId}"
             );
         }
 
-        return $confirmed;
-    }
-
-    public function releaseCouponUsage($orderIds) {
-        $orderIds = $this->normalizeOrderIds($orderIds);
-        if (empty($orderIds)) {
-            return 0;
-        }
-
-        $idsStr = implode(',', $orderIds);
-        $timestamp = time();
-
-        $this->db->query("UPDATE {$this->db_prefix}coupon_usage SET status = -1, update_time = {$timestamp} WHERE order_id IN ({$idsStr}) AND status = 0");
-        return (int)$this->db->affected_rows();
+        return $released;
     }
 
     public function cancelPendingOrder($order_id) {
@@ -467,19 +467,6 @@ class Order_Model {
             }
         }
         
-        // 验证对接站点库存及余额是否充足
-        if($goods['group_id'] == -1){
-            $func = "remoteGoodsVerify" . ucfirst($goods['type']);
-            if(function_exists($func)){
-                $sku_str = empty($sku_ids) ? '0' : implode('-', $sku_ids);
-                $remote_res = $func($goods, $quantity, $sku_str);
-                if(is_array($remote_res) && isset($remote_res['code']) && (int)$remote_res['code'] !== 0){
-                    return $remote_res;
-                }
-            }else{
-                return ['code' => 400, 'msg' => '对接验证函数不存在'];
-            }
-        }
         // 构建规格描述
         $attr_spec = '';
         foreach($goods['skus']['option_name'] as $val){
@@ -593,6 +580,7 @@ class Order_Model {
                     'create_time' => TIMESTAMP,
                     'update_time' => TIMESTAMP,
                 ]);
+                $this->db->query("UPDATE {$this->db_prefix}coupon SET used_times = used_times + 1, update_time = " . TIMESTAMP . " WHERE id = {$coupon_id}");
             }
 
             $this->db->commit();
@@ -1201,10 +1189,6 @@ sql;
                 $w .= " and o.create_time >= {$start_time} and o.create_time <= {$end_time}";
             }
         }
-        $promoter_uid = isset($where['promoter_uid']) ? (int)$where['promoter_uid'] : 0;
-        if($promoter_uid > 0){
-            $w .= " and c.owner_uid = {$promoter_uid}";
-        }
 
 
 
@@ -1215,7 +1199,6 @@ sql;
                         LEFT JOIN {$prefix}user as u on o.user_id=u.uid
                         LEFT JOIN {$prefix}order_list as ol on o.id=ol.order_id
                         LEFT JOIN {$prefix}goods g on g.id=ol.goods_id
-                        LEFT JOIN {$prefix}coupon c on o.coupon_id=c.id
                         WHERE
                             o.delete_time IS NULL {$w}
                             ");
@@ -1261,10 +1244,6 @@ sql;
                 $w .= " and o.create_time >= {$start_time} and o.create_time <= {$end_time}";
             }
         }
-        $promoter_uid = isset($where['promoter_uid']) ? (int)$where['promoter_uid'] : 0;
-        if($promoter_uid > 0){
-            $w .= " and c.owner_uid = {$promoter_uid}";
-        }
 
         $data = $this->db->once_fetch_array("SELECT
                             SUM(o.amount) as total_amount
@@ -1273,7 +1252,6 @@ sql;
                         LEFT JOIN {$prefix}user as u on o.user_id=u.uid
                         LEFT JOIN {$prefix}order_list as ol on o.id=ol.order_id
                         LEFT JOIN {$prefix}goods g on g.id=ol.goods_id
-                        LEFT JOIN {$prefix}coupon c on o.coupon_id=c.id
                         WHERE
                             o.delete_time IS NULL {$w}
                             ");
@@ -1324,10 +1302,6 @@ sql;
                 $w .= " and o.create_time >= {$start_time} and o.create_time <= {$end_time}";
             }
         }
-        $promoter_uid = isset($where['promoter_uid']) ? (int)$where['promoter_uid'] : 0;
-        if($promoter_uid > 0){
-            $w .= " and c.owner_uid = {$promoter_uid}";
-        }
         $sql = <<<sql
                         SELECT 
                             o.* , u.email user_email, u.tel user_tel, u.nickname user_nickname 
@@ -1336,7 +1310,6 @@ sql;
                         LEFT JOIN {$prefix}user as u on o.user_id=u.uid
                         LEFT JOIN {$prefix}order_list as ol on o.id=ol.order_id
                         LEFT JOIN {$prefix}goods g on g.id=ol.goods_id
-                        LEFT JOIN {$prefix}coupon c on o.coupon_id=c.id
                         WHERE 
                             o.delete_time IS NULL {$w} 
                         GROUP BY 
@@ -1402,11 +1375,7 @@ sql;
                         $attach_user .= $k . '：' . $v . '；';
                     }
                     $row['attach_user'] = empty($attach_user) ? '无' : $attach_user;
-                    if (in_array($row['type'], ['em_auto', 'em_manual']) && function_exists('emFormatSkuOptionIds')) {
-                        $row['attr_spec'] = emFormatSkuOptionIds($row['goods_id'], $row['sku'] ?? '');
-                    } else {
-                        $row['attr_spec'] = empty($row['attr_spec']) ? '默认规格' : $row['attr_spec'];
-                    }
+                    $row['attr_spec'] = empty($row['attr_spec']) ? '默认规格' : $row['attr_spec'];
                     $data[$key]['list'][] = $row;
                     $row['attach_user'] = '';
                 }

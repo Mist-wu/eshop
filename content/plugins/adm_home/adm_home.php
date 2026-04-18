@@ -267,7 +267,7 @@ function adm_home(){
     admHomeTwo.setOption(admHomeTwoOption);
     
     function plugin_adm_home_data(type = ""){
-        $.get("/?plugin=adm_home&type=" + type, function(e){
+        $.get("./dashboard_data.php?type=" + type, function(e){
             console.log(e)
             admHomeOneOption.xAxis.data = e.data.oneTitle;
             admHomeTwoOption.xAxis.data = e.data.oneTitle;

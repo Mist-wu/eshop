@@ -73,7 +73,6 @@ if ($action == 'dosignin') {
 //var_dump($uid);die;
     switch ($uid) {
         case $uid > 0:
-            Register::isRegServer();
             $User_Model->updateUser(['ip' => getIp()], $uid);
             if($type == 'tel'){
                 LoginAuth::setAuthCookie($tel, $persist);

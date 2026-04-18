@@ -499,11 +499,6 @@ if ($action == 'shop') {
     extract($options_cache);
     $coupon_switch = empty($coupon_switch) ? 'y' : $coupon_switch;
     $pay_redirect = empty($pay_redirect) ? 'kami' : $pay_redirect;
-    $promoter_coupon_default_discount = $promoter_coupon_default_discount ?? '2.00';
-    $promoter_coupon_default_discount = number_format((float)$promoter_coupon_default_discount, 2, '.', '');
-    if ((float)$promoter_coupon_default_discount <= 0) {
-        $promoter_coupon_default_discount = '2.00';
-    }
 
     // 游客查单模式配置 - 设置默认值
     $guest_query_contact_switch = $guest_query_contact_switch ?? 'y'; // 默认开启
@@ -534,16 +529,9 @@ if ($action == 'shop_save') {
         Output::error('游客查单模式至少需要开启一项（联系方式或订单密码）');
     }
 
-    $promoterDefaultDiscount = Input::postStrVar('promoter_coupon_default_discount', '2.00');
-    $promoterDefaultDiscount = number_format((float)$promoterDefaultDiscount, 2, '.', '');
-    if ((float)$promoterDefaultDiscount <= 0) {
-        Output::error('推广邀请码默认优惠金额必须大于0');
-    }
-
     $getData = [
         'coupon_switch' => Input::postStrVar('coupon_switch', 'n'),
         'pay_redirect' => Input::postStrVar('pay_redirect', 'kami'),
-        'promoter_coupon_default_discount' => $promoterDefaultDiscount,
         // 游客查单模式配置
         'guest_query_contact_switch' => $contactSwitch,
         'guest_query_contact_type' => $_config['guest_query_contact_type'] ?? 'any',

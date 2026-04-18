@@ -335,31 +335,13 @@ $qtyDiscountConfig = $goodsConfig['qty_discount'] ?? [];
                             <input type="hidden" name="type" value="<?= $goods['type'] ?>" />
                         <?php endif; ?>
                         <div class="layui-input-block">
-                            <?php
-                            // 对接商品（group_id = -1）特殊处理
-                            $isRemoteGoods = ($action == 'edit' && ($goods['group_id'] ?? 0) == -1);
-
-                            if ($isRemoteGoods):
-                                // 通过 Hook 获取对接来源信息
-                                $remoteSourceInfo = '';
-                                doMultiAction('get_remote_goods_source', ['goods' => $goods], $remoteSourceInfo);
-                            ?>
-                            <div style="line-height: 38px; color: #666;">
-                                <span class="layui-badge layui-btn-blue" style="margin-right: 8px;">对接商品</span>
-                                <?= $remoteSourceInfo ?: '来源未知' ?>
-                            </div>
-                            <?php else: ?>
-                            <?php foreach($goods['goods_type_all'] as $val):
-                                // 非对接商品时，始终隐藏对接类型（is_remote = true）
-                                if (!$isRemoteGoods && !empty($val['is_remote'])) continue;
-                            ?>
+                            <?php foreach($goods['goods_type_all'] as $val): ?>
                             <input <?= $action == 'edit' ? 'disabled' : '' ?> lay-filter="goods-type-radio" type="radio" name="type" value="<?= $val['value'] ?>" <?= $goods['type'] == $val['value'] ? 'checked' : '' ?> title="<?= $val['name'] ?>">
                             <?php endforeach; ?>
                             <?php if(empty($goods['goods_type_all'])): ?>
                             <span class="form-tips">
                                 当前站点未启用任何商品类型扩展，请先恢复对应模块后再配置更多类型
                             </span>
-                            <?php endif; ?>
                             <?php endif; ?>
                         </div>
 

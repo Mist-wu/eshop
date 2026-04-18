@@ -11,7 +11,6 @@
 require_once 'globals.php';
 
 $User_Model = new User_Model();
-$couponModel = new Coupon_Model();
 
 if($action == 'money_ajax'){
     output::error('余额功能已下线');
@@ -72,20 +71,7 @@ if($action == 'index'){
         $where .= " and (u.uid='{$keyword}' or u.tel like '%{$keyword}%' or u.nickname like '%{$keyword}%' or u.email like '%{$keyword}%')";
     }
 
-    $sql = "SELECT
-                u.*,
-                m.tier_name level_name,
-                IFNULL(cs.coupon_total, 0) promoter_coupon_total,
-                IFNULL(cs.used_total, 0) promoter_coupon_used_total
-            FROM {$db_prefix}user u
-            LEFT JOIN {$db_prefix}user_tier m ON u.level = m.id
-            LEFT JOIN (
-                SELECT owner_uid, COUNT(*) AS coupon_total, IFNULL(SUM(used_times), 0) AS used_total
-                FROM {$db_prefix}coupon
-                WHERE owner_uid > 0
-                GROUP BY owner_uid
-            ) cs ON cs.owner_uid = u.uid
-            WHERE 1=1 $where {$order_by} limit $start, {$limit}";
+    $sql = "SELECT u.*, m.tier_name level_name FROM {$db_prefix}user u left join " . DB_PREFIX . "user_tier m on u.level=m.id  where 1=1 $where {$order_by} limit $start, {$limit}";
     $res = $db->fetch_all($sql);
     $users = [];
     foreach($res as $row){
@@ -97,8 +83,6 @@ if($action == 'index'){
         $row['update_time'] = smartDate($row['update_time']);
         $row['role'] = User::getRoleName($row['role'], (int)$row['uid']);
         $row['level_name'] = empty($row['level_name']) ? '普通用户' : $row['level_name'];
-        $row['promoter_coupon_total'] = (int)($row['promoter_coupon_total'] ?? 0);
-        $row['promoter_coupon_used_total'] = (int)($row['promoter_coupon_used_total'] ?? 0);
         $users[] = $row;
     }
 
@@ -107,26 +91,6 @@ if($action == 'index'){
     $userCount = $res['total'];
 
     output::data($users, $res['total']);
-}
-
-if ($action == 'promoter_profile') {
-    $uid = Input::getIntVar('uid', 0);
-    if ($uid <= 0) {
-        emMsg('用户ID不正确');
-    }
-
-    $promoterUser = $User_Model->getOneUser($uid);
-    if (empty($promoterUser)) {
-        emMsg('用户不存在');
-    }
-
-    $promoterStats = $couponModel->getPromoterCouponStats($uid);
-    $promoterCoupons = $couponModel->getPromoterCoupons($uid, 1, 100);
-
-    include View::getAdmView('open_head');
-    require_once View::getAdmView('user_promoter');
-    include View::getAdmView('open_foot');
-    View::output();
 }
 
 if ($action == 'new') {

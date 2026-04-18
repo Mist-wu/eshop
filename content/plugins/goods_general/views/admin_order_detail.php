@@ -20,9 +20,6 @@ if (empty($user) && !empty($order['user_id'])) {
 }
 
 $attrSpec = $child_order['attr_spec'] ?? '';
-if (in_array($goods['type'] ?? '', ['em_auto', 'em_manual']) && function_exists('emFormatSkuOptionIds')) {
-    $attrSpec = emFormatSkuOptionIds($child_order['goods_id'], $child_order['sku'] ?? '');
-}
 $attrSpec = $attrSpec ?: '默认规格';
 
 $attachText = '';

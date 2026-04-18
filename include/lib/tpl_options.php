@@ -323,7 +323,7 @@ class TplOptions
      */
     public function url($params = array())
     {
-        $baseUrl = './plugin.php?plugin=' . self::ID;
+        $baseUrl = './template.php?action=setting_ajax&tpl=' . rawurlencode(Option::get('nonce_templet'));
         $url = http_build_query($params);
         if ($url === '') {
             return $baseUrl;
