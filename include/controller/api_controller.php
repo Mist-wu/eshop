@@ -14,6 +14,24 @@ class Api_Controller {
     private $goodsModel;
     private $sortModel;
 
+    private function loadGoodsEmApi($requiredFunctions = []) {
+        $emApiFile = EM_ROOT . '/content/plugins/goods_em/lib/EmApi.php';
+        if (!is_file($emApiFile)) {
+            Ret::error('EM对接功能已下线');
+        }
+
+        if (!class_exists('EmApi')) {
+            require_once $emApiFile;
+        }
+
+        foreach ((array)$requiredFunctions as $function) {
+            if (!function_exists($function)) {
+                Ret::error('EM对接功能已下线');
+            }
+        }
+    }
+
+
     function starter($params) {
         $_func = isset($_GET['rest-api']) ? addslashes($_GET['rest-api']) : '';
         if (empty($_func)) {
@@ -249,6 +267,133 @@ class Api_Controller {
     private function getUserInfo(){
         $this->auth();
         Ret::success('success', $this->userInfo);
+    }
+
+    /**
+     * 获取店铺信息
+     */
+    private function getEmInfo(){
+        $this->auth();
+        $data = [
+            'site_name' => Option::get('blogname'),
+        ];
+        Ret::success('success', $data);
+    }
+
+    /**
+     * 获取EM站点列表
+     */
+    private function getEmSites(){
+        $this->auth();
+        $this->loadGoodsEmApi(['emGetSiteList']);
+
+        $sites = emGetSiteList();
+        Ret::success('success', $sites);
+    }
+
+    /**
+     * 添加/更新EM站点
+     */
+    private function saveEmSite(){
+        $this->auth();
+        $post = [
+            'id' => Input::postIntVar('id'),
+            'domain' => Input::postStrVar('domain'),
+            'app_id' => Input::postStrVar('app_id'),
+            'app_key' => Input::postStrVar('app_key'),
+        ];
+
+        $this->loadGoodsEmApi(['emSaveSite']);
+
+        $result = emSaveSite($post);
+        if ($result['success']) {
+            Ret::success($result['message'], ['id' => $result['id']]);
+        } else {
+            Ret::error($result['message']);
+        }
+    }
+
+    /**
+     * 删除EM站点
+     */
+    private function deleteEmSite(){
+        $this->auth();
+        $siteId = Input::postIntVar('site_id');
+
+        $this->loadGoodsEmApi(['emDeleteSite']);
+
+        $result = emDeleteSite($siteId);
+        if ($result) {
+            Ret::success('删除成功');
+        } else {
+            Ret::error('删除失败，该站点可能有关联商品');
+        }
+    }
+
+    /**
+     * 测试EM站点连接
+     */
+    private function testEmConnection(){
+        $this->auth();
+        $post = [
+            'domain' => Input::postStrVar('domain'),
+            'app_id' => Input::postStrVar('app_id'),
+            'app_key' => Input::postStrVar('app_key'),
+        ];
+
+        $this->loadGoodsEmApi();
+
+        $api = new EmApi($post['domain'], $post['app_id'], $post['app_key']);
+        $result = $api->connect();
+
+        if ($result) {
+            Ret::success('连接成功', $result);
+        } else {
+            Ret::error('连接失败：' . $api->getLastError());
+        }
+    }
+
+    /**
+     * 获取EM商品列表
+     */
+    private function getEmGoodsList(){
+        $this->auth();
+        $siteId = Input::postIntVar('site_id');
+
+        $this->loadGoodsEmApi(['emGetSite']);
+
+        $site = emGetSite($siteId);
+        if (!$site) {
+            Ret::error('站点不存在');
+        }
+
+        $api = EmApi::fromSite($site);
+        $items = $api->getItems();
+
+        if ($items !== false) {
+            Ret::success('success', $items);
+        } else {
+            Ret::error('获取商品列表失败：' . $api->getLastError());
+        }
+    }
+
+    /**
+     * 导入EM商品
+     */
+    private function importEmGoods(){
+        $this->auth();
+        $post = [
+            'site_id' => Input::postIntVar('site_id'),
+            'goods_ids' => $_POST['goods_ids'] ?? [],
+            'sort_id' => Input::postIntVar('sort_id'),
+            'raise_type' => Input::postStrVar('raise_type', 'percent'),
+            'raise_value' => floatval($_POST['raise_value'] ?? 10),
+        ];
+
+        $this->loadGoodsEmApi(['emImportGoods']);
+
+        $result = emImportGoods($post);
+        Ret::success('导入完成', $result);
     }
 
     private function article_post() {

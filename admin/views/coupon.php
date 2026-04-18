@@ -15,6 +15,23 @@
 </style>
 
 <div class="page-goods-release">
+    <form class="layui-form" id="coupon-search-form" style="margin-bottom: 12px;">
+        <div class="layui-form-item">
+            <div class="layui-inline">
+                <div class="layui-input-inline">
+                    <input type="text" name="owner_uid" placeholder="推广者用户ID" autocomplete="off" class="layui-input">
+                </div>
+                <div class="layui-input-inline">
+                    <input type="text" name="keyword" placeholder="券码/备注关键词" autocomplete="off" class="layui-input">
+                </div>
+                <div class="layui-form-mid" style="padding: 0!important;">
+                    <button class="layui-btn" lay-submit lay-filter="coupon-search">搜索</button>
+                    <button type="reset" class="layui-btn layui-btn-primary" id="coupon-search-reset">重置</button>
+                </div>
+            </div>
+        </div>
+    </form>
+
     <div class="layui-form-item">
         <div class="layui-input-block">
             <div class="table-box">
@@ -116,6 +133,7 @@
                 cols: [[
                     {type: 'checkbox'},
                     {field:'code', title:'券码', minWidth: 160},
+                    {field:'owner_uid_text', title:'归属推广者', minWidth: 170},
                     {field:'scope_text', title:'适用范围', minWidth: 180},
                     {field:'threshold_text', title:'门槛', width: 110, align: 'center'},
                     {field:'discount_text', title:'优惠', width: 120, align: 'center'},
@@ -152,6 +170,26 @@
                 error: function(res, msg){
                     console.log(res, msg);
                 }
+            });
+
+            form.on('submit(coupon-search)', function(data){
+                table.reload('coupon-table', {
+                    page: { curr: 1 },
+                    where: data.field
+                });
+                return false;
+            });
+
+            $('#coupon-search-reset').on('click', function(){
+                setTimeout(function(){
+                    table.reload('coupon-table', {
+                        page: { curr: 1 },
+                        where: {
+                            owner_uid: '',
+                            keyword: ''
+                        }
+                    });
+                }, 0);
             });
 
             table.on('toolbar(coupon-table)', function(obj){

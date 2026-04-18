@@ -549,6 +549,7 @@ if ($orderStatus === 1) {
 <script>
     (function () {
         var allSecrets = <?= json_encode($secretContents, JSON_UNESCAPED_UNICODE) ?>;
+        var downloadUrl = <?= json_encode(EM_URL . '?plugin=goods_once&action=download&out_trade_no=' . rawurlencode($viewOrder['out_trade_no'] ?? ''), JSON_UNESCAPED_UNICODE) ?>;
 
         function copyToClipboard(text) {
             return new Promise(function(resolve, reject) {
@@ -632,25 +633,15 @@ if ($orderStatus === 1) {
         var downloadBtn = document.getElementById('downloadBtn');
         if (downloadBtn) {
             downloadBtn.addEventListener('click', function() {
-                if (!allSecrets.length) {
+                if (!downloadUrl) {
                     if (window.layui && window.layui.layer) {
-                        layui.layer.msg('暂无可下载内容');
+                        layui.layer.msg('下载地址无效');
                     } else {
-                        alert('暂无可下载内容');
+                        alert('下载地址无效');
                     }
                     return;
                 }
-                var content = allSecrets.join('\r\n');
-                var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-                var url = window.URL.createObjectURL(blob);
-                var a = document.createElement('a');
-                a.href = url;
-                var filenameSeed = <?= json_encode($viewOrder['out_trade_no'] ?? 'order', JSON_UNESCAPED_UNICODE) ?>;
-                a.download = '卡密_' + filenameSeed + '.txt';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
+                window.location.href = downloadUrl;
                 if (window.layui && window.layui.layer) {
                     layui.layer.msg('下载已开始');
                 }

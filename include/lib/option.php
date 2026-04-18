@@ -12,6 +12,7 @@ class Option {
         $options_cache = $CACHE->readCache('options');
 
         switch ($option) {
+            case 'active_plugins':
             case 'widget_title':
             case 'custom_widget':
             case 'widgets1':
@@ -135,6 +136,16 @@ class Option {
                 'reg_0'  => '|^.*/\?(action)=(addcom)([\?&].*)?$|',
             ],
             [
+                'model'  => 'Plugin_Controller',
+                'method' => 'loadPluginShow',
+                'reg_0'  => '|^.*/\?(plugin)=([\w\-]+).*([\?&].*)?$|',
+            ],
+            [
+                'model'  => 'Plugin_Controller',
+                'method' => 'loadPluginShow',
+                'reg_0'  => '|\/(plugin)/([\w\-]+)|',
+            ],
+            [
                 'model'  => 'Api_Controller',
                 'method' => 'starter',
                 'reg_0'  => '|^.*/\?(rest-api)=(\w+)([\?&].*)?$|',
@@ -211,6 +222,15 @@ class Option {
 
     static function getDefWidget() {
         return ['blogger', 'newcomm', 'link', 'search'];
+    }
+
+    static function getDefPlugin() {
+        return [
+            'tips/tips.php',
+            'adm_home/adm_home.php',
+            'goods_once/goods_once.php',
+            'goods_general/goods_general.php',
+        ];
     }
 
     /**

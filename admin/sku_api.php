@@ -19,6 +19,7 @@ switch ($action) {
         $goods_id = Input::getIntVar('goods_id', 0);
         $group_id = Input::getIntVar('type_id', 0);
         $goods_type = Input::getStrVar('goods_type', '');
+        $goods_config = [];
 
         // 获取所有规格模板
         $templates = $db->fetch_all(
@@ -37,6 +38,8 @@ switch ($action) {
         $mode = 'single';
         $spec = [];
         $sku_data = [];
+        $remote_skus = []; // 对接商品的 SKU 组合
+        $remote_spec_names = [];
 
         // 如果是编辑已有商品
         if ($goods_id > 0) {
@@ -46,16 +49,59 @@ switch ($action) {
             if ($goods) {
                 $group_id = (int)$goods['group_id'];
                 $goods_type = $goods['type'];
-                $mode = $goods['is_sku'] === 'y' ? 'multi' : 'single';
+                if (!empty($goods['config'])) {
+                    $decoded_config = json_decode($goods['config'], true);
+                    if (is_array($decoded_config)) {
+                        $goods_config = $decoded_config;
+                    }
+                }
+
+                // 对接商品 (group_id = -1)
+                if ($group_id == -1) {
+                    $mode = 'remote';
+
+                    // 通过 Hook 让插件提供远程规格数据
+                    // 插件应填充 $remote_spec_result 中的:
+                    // - sku_combinations: 规格组合数组，如 ['月费', '季费', '年费'] 或空数组(单规格)
+                    // - sku_data: SKU 价格数据，如 ['月费' => [...], '季费' => [...]]
+                    $hook_input = [
+                        'goods_id' => $goods_id,
+                        'goods_type' => $goods_type
+                    ];
+                    $remote_spec_result = [];
+                    doMultiAction('sku_get_remote_spec', $hook_input, $remote_spec_result);
+
+                    // 如果 Hook 返回了远程规格数据
+                    if (!empty($remote_spec_result)) {
+                        // 远程返回的 SKU 组合
+                        if (!empty($remote_spec_result['sku_combinations'])) {
+                            $remote_skus = $remote_spec_result['sku_combinations'];
+                        }
+                        // 远程返回的规格标题
+                        if (!empty($remote_spec_result['spec_names']) && is_array($remote_spec_result['spec_names'])) {
+                            $remote_spec_names = $remote_spec_result['spec_names'];
+                        }
+                        // 远程返回的价格数据（作为默认值，本地数据优先）
+                        if (!empty($remote_spec_result['sku_data'])) {
+                            foreach ($remote_spec_result['sku_data'] as $sku_key => $remote_prices) {
+                                if (!isset($sku_data[$sku_key])) {
+                                    $sku_data[$sku_key] = $remote_prices;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    $mode = $goods['is_sku'] === 'y' ? 'multi' : 'single';
+                }
             }
 
             // 获取本地已有的 SKU 数据
-            $local_sku_data = getSkuDataForGoods($goods_id, []);
+            $local_sku_data = getSkuDataForGoods($goods_id, $goods_config);
             // 本地数据优先，合并到 sku_data
             $sku_data = array_merge($sku_data, $local_sku_data);
         }
 
-        // 如果有规格模板，获取规格数据
+        // 如果有规格模板，获取规格数据（对接商品不需要）
         if ($group_id > 0) {
             $spec = getSpecDataForTemplate($group_id, $goods_id);
         }
@@ -67,7 +113,9 @@ switch ($action) {
             'members' => $members,
             'price_fields' => $price_fields,
             'spec' => $spec,
-            'sku_data' => $sku_data
+            'sku_data' => $sku_data,
+            'remote_skus' => $remote_skus, // 对接商品的 SKU 组合
+            'remote_spec_names' => $remote_spec_names
         ]);
         break;
 

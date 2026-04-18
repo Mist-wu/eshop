@@ -17,12 +17,14 @@ const EmSku = (function() {
         goods_id: 0,
         type_id: 0,
         goods_type: '',
-        mode: 'single',  // single | multi
+        mode: 'single',  // single | multi | remote
         templates: [],
         members: [],
         price_fields: [],
         spec: [],
         sku_data: {},
+        remote_skus: [], // 对接商品的 SKU 组合
+        remote_spec_names: [],
         initialized: false,
         loading_count: 0,
         loading_message: '',
@@ -65,7 +67,11 @@ const EmSku = (function() {
             state.last_error = '';
 
             // 渲染 UI
-            if (state.mode === 'multi') {
+            if (state.mode === 'remote') {
+                // 对接商品模式：隐藏规格类型选择、模板选择、规格选择
+                showRemoteMode();
+                renderRemoteSkuTable();
+            } else if (state.mode === 'multi') {
                 renderTemplateSelect();
                 setModeRadio();
                 showMultiMode();
@@ -133,6 +139,21 @@ const EmSku = (function() {
         $('#em-sku-mode').show();
         $('#em-sku-template').show();
         state.mode = 'multi';
+    }
+
+    /**
+     * 显示对接商品模式 UI（隐藏规格相关选项）
+     */
+    function showRemoteMode() {
+        $('#em-sku-mode').hide();
+        $('#em-sku-template').hide();
+        $('#em-sku-spec-wrap').hide();
+        // 禁用原来的 radio 按钮，防止被提交
+        $('input[name="is_sku"]').prop('disabled', true);
+        // 添加隐藏字段保持 group_id = -1（对接商品标识）
+        if ($('input[name="group_id"][type="hidden"]').length === 0) {
+            $('#em-sku-widget').append('<input type="hidden" name="group_id" value="-1" />');
+        }
     }
 
     /**
@@ -220,6 +241,60 @@ const EmSku = (function() {
         }).always(function() {
             endLoading();
         });
+    }
+
+    /**
+     * 渲染对接商品的 SKU 表格
+     */
+    function renderRemoteSkuTable() {
+        // 判断是单规格还是多规格
+        if (state.remote_skus.length === 0) {
+            // 单规格对接商品
+            const singleData = state.sku_data['0'] || {};
+            beginLoading('规格信息加载中...');
+            $('#em-sku-table').html('<div class="em-sku-empty">加载中...</div>');
+            $.get(API_URL + '?action=render_single', {
+                price_fields: JSON.stringify(state.price_fields),
+                sku_data: JSON.stringify(singleData)
+            }, function(html) {
+                state.last_error = '';
+                $('#em-sku-table').html(html);
+                // 添加隐藏字段 is_sku = n（先移除可能存在的旧字段）
+                $('input[name="is_sku"][type="hidden"]').remove();
+                $('#em-sku-table').prepend('<input type="hidden" name="is_sku" value="n" />');
+                form.render();
+            }).fail(function() {
+                state.last_error = '规格信息加载失败，请刷新页面后重试';
+                notifyStatus();
+                layer.msg('渲染对接商品规格失败');
+            }).always(function() {
+                endLoading();
+            });
+        } else {
+            // 多规格对接商品
+            beginLoading('规格信息加载中...');
+            $('#em-sku-table').html('<div class="em-sku-empty">加载中...</div>');
+            $.post(API_URL, {
+                action: 'render_multi',
+                combinations: JSON.stringify(state.remote_skus),
+                price_fields: JSON.stringify(state.price_fields),
+                sku_data: JSON.stringify(state.sku_data),
+                spec_names: JSON.stringify(state.remote_spec_names.length > 0 ? state.remote_spec_names : ['规格'])
+            }, function(html) {
+                state.last_error = '';
+                $('#em-sku-table').html(html);
+                // 添加隐藏字段 is_sku = y（先移除可能存在的旧字段）
+                $('input[name="is_sku"][type="hidden"]').remove();
+                $('#em-sku-table').prepend('<input type="hidden" name="is_sku" value="y" />');
+                form.render();
+            }).fail(function() {
+                state.last_error = '规格信息加载失败，请刷新页面后重试';
+                notifyStatus();
+                layer.msg('渲染对接商品规格失败');
+            }).always(function() {
+                endLoading();
+            });
+        }
     }
 
     /**
@@ -322,6 +397,12 @@ const EmSku = (function() {
      * 绑定所有事件处理器
      */
     function bindEvents() {
+        // 对接商品模式不需要绑定这些事件
+        if (state.mode === 'remote') {
+            bindBatchFillEvent();
+            return;
+        }
+
         // 规格类型切换（单规格/多规格）
         form.on('radio(em-sku-mode)', function(data) {
             if (data.value === 'y') {

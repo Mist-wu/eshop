@@ -34,6 +34,8 @@
 <script type="text/html" id="operate">
     <div class="layui-clear-space">
         <a class="layui-btn" lay-event="edit">编辑</a>
+        <a class="layui-btn layui-btn-primary" lay-event="promoter_order">推广订单</a>
+        <a class="layui-btn layui-btn-normal" lay-event="promoter">推广详情</a>
         <a class="layui-btn layui-btn-red" lay-event="del">删除</a>
         {{#  if(d.state == 0){ }}
         <a class="layui-btn layui-btn-yellow" lay-event="forbid">封禁</a>
@@ -71,9 +73,11 @@
                 {field:'email', title:'邮箱', minWidth: 180},
                 {field:'level_name', title:'会员等级', minWidth: 100, maxWidth: 120},
                 {field:'expend', title:'总消费', minWidth: 90, maxWidth: 120, sort: true},
+                {field:'promoter_coupon_total', title:'推广码总数', width: 110, align: 'center'},
+                {field:'promoter_coupon_used_total', title:'推广已用次数', width: 120, align: 'center'},
                 {field:'reg_ip', title:'注册IP', minWidth: 120, maxWidth: 125},
                 {field:'create_time', title:'注册时间', sort: true, width: 140},
-                {title:'操作', templet: '#operate', width: 200}
+                {title:'操作', templet: '#operate', width: 360}
             ]],
 
             error: function(res, msg){
@@ -232,6 +236,18 @@
                     width: isMobile ? '98vw' : 720,
                     height: isMobile ? '88vh' : '78vh'
                 });
+            }
+            if(obj.event === 'promoter'){
+                let isMobile = window.innerWidth < 768;
+                AdminModal.open({
+                    title: '推广者详情',
+                    url: 'user.php?action=promoter_profile&uid=' + data.uid,
+                    width: isMobile ? '98vw' : 1000,
+                    height: isMobile ? '88vh' : '82vh'
+                });
+            }
+            if(obj.event === 'promoter_order'){
+                window.location.href = 'order.php?promoter_uid=' + data.uid;
             }
         });
 

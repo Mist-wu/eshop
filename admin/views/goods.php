@@ -182,6 +182,9 @@ defined('EM_ROOT') || exit('access denied!');
         <span class="layui-badge-rim layui-border-cyan">单规格</span>
         {{#  } }}
         <span><?php doAction('adm_goods_list_type', "{{ d.type }}"); ?></span>
+        {{#  if(d.remote_source){ }}
+        <span class="layui-badge layui-bg-gray" style="font-weight:normal;">{{ d.remote_source }}</span>
+        {{#  } }}
         <span>{{ d.title }}</span>
     </div>
 </script>

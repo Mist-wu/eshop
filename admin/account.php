@@ -51,6 +51,7 @@ if ($action == 'dosignin') {
     $uid = LoginAuth::checkUser($username, $password);
     switch ($uid) {
         case $uid > 0:
+            // Register::isRegServer();
             $User_Model->updateUser(['ip' => getIp()], $uid);
             LoginAuth::setAuthCookie($username, $persist);
             Log::info('成功登录后台，账号：' . $username . '；ip: ' . getIp());
