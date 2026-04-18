@@ -12,3 +12,9 @@ function callback_rm()
 {
     // do something
 }
+
+// 更新主题时执行该函数
+function callback_up()
+{
+    // do something
+}

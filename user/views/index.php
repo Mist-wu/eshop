@@ -325,6 +325,7 @@
 
             <div class="hero-actions">
                 <a href="/user/order.php" class="hero-btn"><i class="fa fa-list"></i>订单列表</a>
+                <a href="/user/promotion.php" class="hero-btn"><i class="fa fa-bullhorn"></i>推广中心</a>
                 <a href="/user/visitors.php" class="hero-btn ghost"><i class="fa fa-search"></i>游客查单</a>
                 <a href="/user/profile.php" class="hero-btn ghost"><i class="fa fa-user"></i>个人资料</a>
             </div>

@@ -8,6 +8,7 @@ require_once 'globals.php';
 $db = Database::getInstance();
 $db_prefix = DB_PREFIX;
 $action = Input::getStrVar('action');
+$couponModel = new Coupon_Model();
 
 $allowed_types = ['general', 'goods', 'category'];
 $allowed_threshold_types = ['none', 'min'];
@@ -258,20 +259,37 @@ if ($action === 'save' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 if ($action === 'index') {
     $page = Input::getIntVar('page', 1);
     $limit = Input::getIntVar('limit', 30);
+    $owner_uid = Input::getIntVar('owner_uid', 0);
+    $keyword = trim(Input::getStrVar('keyword', ''));
+
     $page = max(1, (int)$page);
     $limit = (int)$limit > 0 ? (int)$limit : 30;
     $offset = ($page - 1) * $limit;
 
-    $countRow = $db->once_fetch_array("SELECT COUNT(*) AS total FROM `{$db_prefix}coupon`");
+    $where = "1=1";
+    if ($owner_uid > 0) {
+        $where .= " AND owner_uid = {$owner_uid}";
+    }
+    if ($keyword !== '') {
+        $keyword = $db->escape_string($keyword);
+        $where .= " AND (code LIKE '%{$keyword}%' OR remark LIKE '%{$keyword}%')";
+    }
+
+    $countRow = $db->once_fetch_array("SELECT COUNT(*) AS total FROM `{$db_prefix}coupon` WHERE {$where}");
     $total = (int)($countRow['total'] ?? 0);
-    $list = $db->fetch_all("SELECT * FROM `{$db_prefix}coupon` ORDER BY id DESC LIMIT {$offset}, {$limit}");
+    $list = $db->fetch_all("SELECT * FROM `{$db_prefix}coupon` WHERE {$where} ORDER BY id DESC LIMIT {$offset}, {$limit}");
 
     $sorts = $CACHE->readCache('sort');
     $goods_ids = [];
+    $owner_uids = [];
     foreach ($list as $row) {
         $gid = (int)($row['goods_id'] ?? 0);
         if ($gid > 0) {
             $goods_ids[$gid] = true;
+        }
+        $ownerUid = (int)($row['owner_uid'] ?? 0);
+        if ($ownerUid > 0) {
+            $owner_uids[$ownerUid] = true;
         }
     }
 
@@ -281,6 +299,15 @@ if ($action === 'index') {
         $goods_rows = $db->fetch_all("SELECT id, title, sort_id FROM `{$db_prefix}goods` WHERE id IN ({$goods_id_str})");
         foreach ($goods_rows as $goods) {
             $goods_map[(int)$goods['id']] = $goods;
+        }
+    }
+
+    $owner_map = [];
+    if (!empty($owner_uids)) {
+        $owner_id_str = implode(',', array_keys($owner_uids));
+        $owner_rows = $db->fetch_all("SELECT uid, nickname FROM `{$db_prefix}user` WHERE uid IN ({$owner_id_str})");
+        foreach ($owner_rows as $owner) {
+            $owner_map[(int)$owner['uid']] = $owner;
         }
     }
 
@@ -331,6 +358,14 @@ if ($action === 'index') {
         $row['prefix_text'] = htmlspecialchars($prefix_text, ENT_QUOTES);
         $row['remark_text'] = htmlspecialchars($remark_text, ENT_QUOTES);
         $row['remark_title'] = htmlspecialchars($remark_raw, ENT_QUOTES);
+        $ownerUid = (int)($row['owner_uid'] ?? 0);
+        if ($ownerUid > 0) {
+            $ownerNickname = isset($owner_map[$ownerUid]['nickname']) ? trim((string)$owner_map[$ownerUid]['nickname']) : '';
+            $ownerLabel = $ownerNickname !== '' ? ('UID:' . $ownerUid . '（' . $ownerNickname . '）') : ('UID:' . $ownerUid);
+            $row['owner_uid_text'] = htmlspecialchars($ownerLabel, ENT_QUOTES);
+        } else {
+            $row['owner_uid_text'] = '后台创建';
+        }
     }
     unset($row);
 

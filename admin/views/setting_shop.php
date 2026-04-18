@@ -111,6 +111,16 @@
             </div>
 
             <div class="layui-form-item">
+                <label class="layui-form-label">推广码默认优惠</label>
+                <div class="layui-input-block">
+                    <input type="number" step="0.01" min="0.01" name="promoter_coupon_default_discount" value="<?= htmlspecialchars($promoter_coupon_default_discount ?? '2.00', ENT_QUOTES) ?>" class="layui-input" placeholder="例如 2.00">
+                    <div class="layui-form-mid layui-word-aux" style="float:none; padding-top:8px;">
+                        注册用户创建推广邀请码时，默认抵扣金额（单位：元），管理员后续可在优惠券管理单独调整每张邀请码。
+                    </div>
+                </div>
+            </div>
+
+            <div class="layui-form-item">
                 <label class="layui-form-label">支付成功后跳转</label>
                 <div class="layui-input-block">
                     <input type="radio" name="pay_redirect" value="kami" title="订单详情页" <?= $pay_redirect == 'kami' ? 'checked' : '' ?>>
