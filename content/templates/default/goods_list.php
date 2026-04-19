@@ -99,6 +99,42 @@ foreach ($childSorts as $parentId => $items) {
         ];
     }
 }
+
+$getSafeHref = static function ($url) {
+    $str = trim((string) $url);
+    if ($str === '') {
+        return '#';
+    }
+
+    if (preg_match('{^//}', $str)) {
+        return '#';
+    }
+
+    if (preg_match('{^(#|\?|/(?!/)|\./|\.\./)}', $str)) {
+        return htmlspecialchars($str, ENT_QUOTES, 'UTF-8');
+    }
+
+    if (preg_match('{^[a-z][a-z0-9+.-]*:}i', $str)) {
+        if (!filter_var($str, FILTER_VALIDATE_URL)) {
+            return '#';
+        }
+
+        $scheme = strtolower((string) parse_url($str, PHP_URL_SCHEME));
+        if ($scheme === 'http' || $scheme === 'https') {
+            return htmlspecialchars($str, ENT_QUOTES, 'UTF-8');
+        }
+
+        return '#';
+    }
+
+    if (preg_match('/[\x00-\x20<>"\']/', $str)) {
+        return '#';
+    }
+
+    return htmlspecialchars($str, ENT_QUOTES, 'UTF-8');
+};
+
+$fallbackCover = EM_URL . 'content/static/images/cover.svg';
 ?>
 
 <main class="blog-container goods-list-page df-list-page">
@@ -121,33 +157,33 @@ foreach ($childSorts as $parentId => $items) {
             <div class="df-category-wrapper<?= !$categoryEnabled && $searchEnabled ? ' search-only' : '' ?>">
                 <?php if ($categoryEnabled): ?>
                 <div class="df-category-grid">
-                <a href="javascript:;" class="df-category-card is-featured js-featured-card<?= $isFeaturedView ? ' is-active' : '' ?>" data-sort-name="精选商品">
+                <button type="button" class="df-category-card is-featured js-featured-card<?= $isFeaturedView ? ' is-active' : '' ?>" data-sort-name="精选商品">
                     <span class="df-category-badge"><i class="fa fa-star"></i></span>
                     <span class="df-category-label">精选商品</span>
-                </a>
+                </button>
 
-                <?php foreach ($parentSorts as $item): ?>
+                        <?php foreach ($parentSorts as $item): ?>
                     <?php
                     $sortId = (string)$item['sort_id'];
                     $isActive = $currentParentSortId !== '' && $currentParentSortId === $sortId && $initialKeyword === '';
                     $sortImg = !empty($item['sortimg']) ? $item['sortimg'] : '';
                     ?>
-                    <a href="javascript:;" class="df-category-card js-parent-card<?= $isActive ? ' is-active' : '' ?>" data-sort-id="<?= $sortId ?>" data-sort-name="<?= htmlspecialchars($item['sortname'], ENT_QUOTES, 'UTF-8') ?>">
+                    <button type="button" class="df-category-card js-parent-card<?= $isActive ? ' is-active' : '' ?>" data-sort-id="<?= $sortId ?>" data-sort-name="<?= htmlspecialchars($item['sortname'], ENT_QUOTES, 'UTF-8') ?>">
                         <?php if ($sortImg !== ''): ?>
                             <span class="df-category-thumb">
-                                <img src="<?= $sortImg ?>" alt="<?= htmlspecialchars($item['sortname'], ENT_QUOTES, 'UTF-8') ?>" onerror="this.src='<?= EM_URL ?>admin/views/images/cover.svg'; this.onerror=null;">
+                                <img src="<?= $sortImg ?>" alt="<?= htmlspecialchars($item['sortname'], ENT_QUOTES, 'UTF-8') ?>" onerror="this.src='<?= $fallbackCover ?>'; this.onerror=null;">
                             </span>
                         <?php else: ?>
                             <span class="df-category-badge is-muted"><i class="fa fa-th-large"></i></span>
                         <?php endif; ?>
                         <span class="df-category-label"><?= $item['sortname'] ?></span>
-                    </a>
+                    </button>
                 <?php endforeach; ?>
                 </div>
                 <?php endif; ?>
 
                 <?php if ($searchEnabled): ?>
-                <form class="df-search-form js-goods-search-form" action="javascript:;" autocomplete="off">
+                <form class="df-search-form js-goods-search-form" autocomplete="off">
                     <div class="df-search-shell">
                         <i class="fa fa-search df-search-icon"></i>
                         <input class="df-search-input js-goods-search-input" type="text" maxlength="60" placeholder="输入关键词" value="<?= htmlspecialchars($initialKeyword, ENT_QUOTES, 'UTF-8') ?>">
@@ -165,9 +201,9 @@ foreach ($childSorts as $parentId => $items) {
                 <div class="df-subtabs js-subtabs">
                     <?php if (!empty($currentParentSortId) && !empty($childSorts[$currentParentSortId])): ?>
                         <?php foreach ($childSorts[$currentParentSortId] as $item): ?>
-                            <a href="javascript:;" class="df-subtab-chip js-child-chip<?= $currentSortId === (string)$item['sort_id'] ? ' is-active' : '' ?>" data-sort-id="<?= $item['sort_id'] ?>" data-sort-name="<?= htmlspecialchars($item['sortname'], ENT_QUOTES, 'UTF-8') ?>">
+                            <button type="button" class="df-subtab-chip js-child-chip<?= $currentSortId === (string)$item['sort_id'] ? ' is-active' : '' ?>" data-sort-id="<?= $item['sort_id'] ?>" data-sort-name="<?= htmlspecialchars($item['sortname'], ENT_QUOTES, 'UTF-8') ?>">
                                 <?= $item['sortname'] ?>
-                            </a>
+                            </button>
                         <?php endforeach; ?>
                     <?php endif; ?>
                 </div>
@@ -189,9 +225,10 @@ foreach ($childSorts as $parentId => $items) {
                 <?php if (!empty($goods_list)): ?>
                     <div class="df-products-grid grid-cols-xs-2 grid-cols-sm-2 grid-cols-md-3 grid-cols-lg-4 grid-cols-xl-6 grid-gap-15">
                         <?php foreach ($goods_list as $item): ?>
-                            <a class="df-product-card" href="<?= $item['url'] ?>" title="<?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8') ?>"<?= !empty($item['link']) ? ' target="_blank" rel="noopener noreferrer"' : '' ?>>
+                            <?php $safeHref = $getSafeHref($item['url'] ?? ($item['link'] ?? '')); ?>
+                            <a class="df-product-card" href="<?= $safeHref ?>" title="<?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8') ?>"<?= !empty($item['link']) && $safeHref !== '#' ? ' target="_blank" rel="noopener noreferrer"' : '' ?>>
                                 <div class="df-product-thumb">
-                                    <img src="<?= $item['cover'] ?>" alt="<?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8') ?>" loading="lazy" onerror="this.src='<?= EM_URL ?>admin/views/images/cover.svg'; this.onerror=null;">
+                                    <img src="<?= $item['cover'] ?>" alt="<?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8') ?>" loading="lazy" onerror="this.src='<?= $fallbackCover ?>'; this.onerror=null;">
                                 </div>
                                 <div class="df-product-body">
                                     <div class="df-product-name"><?= $item['title'] ?></div>
@@ -252,8 +289,7 @@ foreach ($childSorts as $parentId => $items) {
     }
 
     var apiUrl = $listSection.data('api') || '/?rest-api=getCategoryProducts';
-    var fallbackCover = '<?= EM_URL ?>admin/views/images/cover.svg';
-    var homeUrl = '<?= EM_URL ?>';
+    var fallbackCover = '<?= $fallbackCover ?>';
     var searchEnabled = <?= $searchEnabled ? 'true' : 'false' ?>;
     var stockShow = <?= _g('stock_show') != 'n' ? 'true' : 'false' ?>;
     var salesShow = <?= _g('sales_show') != 'n' ? 'true' : 'false' ?>;
@@ -292,6 +328,43 @@ foreach ($childSorts as $parentId => $items) {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+    }
+
+    function getSafeUrl(url) {
+        var str = $.trim(String(url == null ? '' : url));
+        var parsed = null;
+
+        if (!str) {
+            return '#';
+        }
+
+        if (/^\/\//.test(str)) {
+            return '#';
+        }
+
+        if (/^(#|\?|\/(?!\/)|\.\.?\/)/.test(str)) {
+            return escHtml(str);
+        }
+
+        if (/^[a-z][a-z0-9+.-]*:/i.test(str)) {
+            try {
+                parsed = new URL(str);
+            } catch (err) {
+                return '#';
+            }
+
+            if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+                return escHtml(str);
+            }
+
+            return '#';
+        }
+
+        if (/[\s<>"']/.test(str)) {
+            return '#';
+        }
+
+        return escHtml(str);
     }
 
     function normalizeList(resp) {
@@ -356,7 +429,7 @@ foreach ($childSorts as $parentId => $items) {
 
     function buildCard(item) {
         var title = escHtml(item.title || item.name || '');
-        var url = escHtml(item.url || item.link || '#');
+        var url = getSafeUrl(item.url || item.link || '#');
         var cover = escHtml(item.cover || item.img || fallbackCover);
         var priceText = escHtml(item.price != null ? item.price : '');
         var marketText = item.market_price != null ? String(item.market_price) : '';
@@ -367,7 +440,7 @@ foreach ($childSorts as $parentId => $items) {
         var autoRaw = item.is_auto != null ? item.is_auto : item.isAuto;
         var isAuto = autoRaw === true || autoRaw === 1 || autoRaw === '1' || autoRaw === 'y';
         var hasLink = item.link != null && String(item.link).trim() !== '';
-        var targetAttr = hasLink ? ' target="_blank" rel="noopener noreferrer"' : '';
+        var targetAttr = hasLink && url !== '#' ? ' target="_blank" rel="noopener noreferrer"' : '';
 
         var html = '';
         html += '<a class="df-product-card" href="' + url + '" title="' + title + '"' + targetAttr + '>';
@@ -494,7 +567,7 @@ foreach ($childSorts as $parentId => $items) {
         for (var i = 0; i < items.length; i++) {
             var item = items[i];
             var activeClass = String(activeSortId || '') === String(item.sort_id) ? ' is-active' : '';
-            html += '<a href="javascript:;" class="df-subtab-chip js-child-chip' + activeClass + '" data-sort-id="' + escHtml(item.sort_id) + '" data-sort-name="' + escHtml(item.sortname) + '">' + escHtml(item.sortname) + '</a>';
+            html += '<button type="button" class="df-subtab-chip js-child-chip' + activeClass + '" data-sort-id="' + escHtml(item.sort_id) + '" data-sort-name="' + escHtml(item.sortname) + '">' + escHtml(item.sortname) + '</button>';
         }
 
         $subtabs.html(html);
