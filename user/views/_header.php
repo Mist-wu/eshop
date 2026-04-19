@@ -10,12 +10,12 @@
     <link href="<?= empty(Option::get('home_icon')) ? EM_URL . 'favicon.ico' : Option::get('home_icon'); ?>" rel="shortcut icon">
 
 
-    <script src="<?= EM_URL ?>/admin/views/js/jquery.min.3.5.1.js"></script>
-    <link rel="stylesheet" href="<?= EM_URL ?>/admin/views/layui-v2.11.6/layui/css/layui.css">
-    <script src="<?= EM_URL ?>/admin/views/layui-v2.11.6/layui/layui.js"></script>
-    <script src="<?= EM_URL ?>/admin/views/components/clipboard.min.js?t=<?= Option::EM_VERSION_TIMESTAMP ?>"></script>
+    <script src="<?= EM_URL ?>/content/static/vendor/jquery/jquery.min.3.5.1.js"></script>
+    <link rel="stylesheet" href="<?= EM_URL ?>/content/static/vendor/layui-v2.11.6/layui/css/layui.css">
+    <script src="<?= EM_URL ?>/content/static/vendor/layui-v2.11.6/layui/layui.js"></script>
+    <script src="<?= EM_URL ?>/content/static/vendor/clipboard/clipboard.min.js?t=<?= Option::EM_VERSION_TIMESTAMP ?>"></script>
 
-    <link rel="stylesheet" type="text/css" href="<?= EM_URL ?>/admin/views/font-awesome-4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" type="text/css" href="<?= EM_URL ?>/content/static/vendor/font-awesome-4.7.0/css/font-awesome.min.css">
     <link rel="stylesheet" href="<?= EM_URL ?>/content/static/css/em.css">
 
 

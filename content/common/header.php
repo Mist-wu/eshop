@@ -71,11 +71,11 @@ if ($is_user_login) {
     <link rel="alternate" title="RSS" href="<?= EM_URL ?>rss.php" type="application/rss+xml"/>
 
 
-    <script src="<?= EM_URL ?>admin/views/js/jquery.min.3.5.1.js"></script>
+    <script src="<?= EM_URL ?>content/static/vendor/jquery/jquery.min.3.5.1.js"></script>
     <!-- 字体 -->
-    <link rel="stylesheet" type="text/css" href="<?= EM_URL ?>admin/views/font-awesome-4.7.0/css/font-awesome.min.css">
-    <link rel="stylesheet" href="<?= EM_URL ?>admin/views/layui-v2.11.6/layui/css/layui.css">
-    <script src="<?= EM_URL ?>admin/views/layui-v2.11.6/layui/layui.js"></script>
+    <link rel="stylesheet" type="text/css" href="<?= EM_URL ?>content/static/vendor/font-awesome-4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="<?= EM_URL ?>content/static/vendor/layui-v2.11.6/layui/css/layui.css">
+    <script src="<?= EM_URL ?>content/static/vendor/layui-v2.11.6/layui/layui.js"></script>
 
 
 

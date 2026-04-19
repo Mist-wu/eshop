@@ -11,11 +11,11 @@
 
     <link href="<?= empty(Option::get('home_icon')) ? EM_URL . 'favicon.ico' : Option::get('home_icon'); ?>" rel="shortcut icon">
 
-    <link rel="stylesheet" href="../../../admin/views/layui-v2.11.6//layui/css/layui.css">
-    <script src="../../../admin/views/layui-v2.11.6/layui/layui.js"></script>
+    <link rel="stylesheet" href="<?= EM_URL ?>content/static/vendor/layui-v2.11.6/layui/css/layui.css">
+    <script src="<?= EM_URL ?>content/static/vendor/layui-v2.11.6/layui/layui.js"></script>
 
-    <script src="../../../admin/views/js/jquery.min.3.5.1.js"></script>
-    <link rel="stylesheet" type="text/css" href="../../../admin/views/font-awesome-4.7.0/css/font-awesome.min.css">
+    <script src="<?= EM_URL ?>content/static/vendor/jquery/jquery.min.3.5.1.js"></script>
+    <link rel="stylesheet" type="text/css" href="<?= EM_URL ?>content/static/vendor/font-awesome-4.7.0/css/font-awesome.min.css">
 
 
     <?php doAction('login_head') ?>

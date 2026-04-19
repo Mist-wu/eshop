@@ -29,7 +29,7 @@ $home_icon = Option::get('home_icon');
     <link href="<?= BLOG_TEMPLATE_URL ?>css/style.css?v=<?= $v ?>&t=<?= Option::EM_VERSION_TIMESTAMP ?>" rel="stylesheet" />
     <link href="<?= BLOG_TEMPLATE_URL ?>css/icon/iconfont.css?v=<?= $v ?>&t=<?= Option::EM_VERSION_TIMESTAMP ?>" rel="stylesheet" />
     <link href="<?= BLOG_TEMPLATE_URL ?>css/markdown.css?v=<?= $v ?>&t=<?= Option::EM_VERSION_TIMESTAMP ?>" rel="stylesheet" />
-    <script src="../../../admin/views/js/jquery.min.3.5.1.js?v=<?= $v ?>&t=<?= Option::EM_VERSION_TIMESTAMP ?>"></script>
+    <script src="<?= EM_URL ?>content/static/vendor/jquery/jquery.min.3.5.1.js?v=<?= $v ?>&t=<?= Option::EM_VERSION_TIMESTAMP ?>"></script>
     <script src="<?= BLOG_TEMPLATE_URL ?>js/common_tpl.js?v=<?= $v ?>&t=<?= Option::EM_VERSION_TIMESTAMP ?>"></script>
     <script src="<?= BLOG_TEMPLATE_URL ?>js/zoom.js?v=<?= $v ?>&t=<?= Option::EM_VERSION_TIMESTAMP ?>"></script>
     <?php doAction('index_head') ?>
