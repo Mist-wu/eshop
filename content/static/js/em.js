@@ -120,112 +120,116 @@ var em = (function() {
     };
 })();
 
-/**
- * 禁用无库存的规格
- */
-function initSku(data){
-    // 1. 收集所有规格选项
-    var specOptions = {};
-    $('.spec-option').each(function() {
-        var $this = $(this);
-        var id = $this.data('id').toString();
-        specOptions[id] = {
-            element: $this,
-            hasStock: true // 默认有货
-        };
-    });
-
-    // 2. 获取当前选中的规格
-    var currentSelectedSpecs = [];
-    $('.spec-option.active').each(function() {
-        currentSelectedSpecs.push($(this).data('id').toString());
-    });
-
-
-    // 遍历每个规格组
-    $('.spec-group').each(function() {
-        var $group = $(this);
-        var groupIndex = $('.spec-group').index($group); // 获取当前组的索引（0=类型组，1=时长组）
-
-        // 遍历当前组的每个规格选项
-        $group.find('.spec-option').each(function() {
-            var $this = $(this);
-            var thisSpecId = $this.data('id').toString();
-
-            // 如果这个规格已经被选中，则保持可用状态
-            if ($this.hasClass('active')) {
-                $this.removeClass('disabled').addClass('available');
-                return;
-            }
-
-            // 优先级1：如果已选中其他规格，检查是否可以与已选中规格组合成有库存的SKU
-            var hasValidCombination = false;
-
-            if (currentSelectedSpecs.length > 0) {
-                // 检查该规格选项是否可以与已选中的规格组合成有库存的SKU
-                $.each(data.skus.option_value, function(key, val) {
-                    if (val.stock > 0) {
-                        var skuSpecIds = key.split('-');
-
-                        // 检查当前SKU是否包含这个规格ID
-                        if (skuSpecIds[groupIndex] === thisSpecId) {
-                            // 检查当前SKU是否与已选中的其他规格兼容
-                            var isCompatible = true;
-
-                            // 直接遍历已选中的DOM元素，避免data-id冲突
-                            $('.spec-option.active').each(function() {
-                                var $selectedOption = $(this);
-                                var selectedSpecId = $selectedOption.data('id').toString();
-                                var selectedGroupIndex = $('.spec-group').index($selectedOption.closest('.spec-group'));
-
-                                // 跳过当前正在检查的规格组
-                                if (selectedGroupIndex === groupIndex) {
-                                    return true; // continue
-                                }
-
-                                // 检查已选中规格是否在当前SKU中
-                                if (skuSpecIds[selectedGroupIndex] !== selectedSpecId) {
-                                    isCompatible = false;
-                                    return false; // break
-                                }
-                            });
-
-                            if (isCompatible) {
-                                hasValidCombination = true;
-                                return false; // 找到一个有效组合即可
-                            }
-                        }
-                    }
-                });
-            } else {
-                // 优先级2：如果未选中任何规格，检查该规格选项是否参与任意一个有库存的SKU组合
-                $.each(data.skus.option_value, function(key, val) {
-                    if (val.stock > 0) {
-                        var skuSpecIds = key.split('-');
-
-                        if (skuSpecIds[groupIndex] === thisSpecId) {
-                            hasValidCombination = true;
-                            return false; // 找到一个有效组合即可
-                        }
-                    }
-                });
-            }
-
-            // 根据检查结果启用或禁用
-            if (hasValidCombination) {
-                $this.removeClass('disabled').addClass('available');
-            } else {
-                $this.addClass('disabled').removeClass('available');
-            }
-        });
-    });
-}
-
 var couponState = {
     applied: false,
     code: '',
     discount: '0.00'
 };
+
+var orderState = {
+    goodsId: '',
+    skuIds: [],
+    quantity: 1,
+    paymentPlugin: '',
+    paymentName: '',
+    paymentTitle: '',
+    couponCode: '',
+    isSubmitting: false
+};
+
+function getGoodsId() {
+    return $.trim(String($('#goods_id').val() || ''));
+}
+
+function getSelectedSkuIds() {
+    var activeDataIds = [];
+    $('.spec-option.active').each(function() {
+        activeDataIds.push(String($(this).data('id')));
+    });
+    return activeDataIds;
+}
+
+function getSelectedSpecMap($groups) {
+    var selectedMap = {};
+    ($groups || $('.spec-group')).each(function(groupIndex) {
+        var $active = $(this).find('.spec-option.active').first();
+        if ($active.length) {
+            selectedMap[groupIndex] = String($active.data('id'));
+        }
+    });
+    return selectedMap;
+}
+
+function isSkuCompatible(skuSpecIds, selectedMap, ignoreGroupIndex) {
+    var groupIndex;
+    for (groupIndex in selectedMap) {
+        if (!Object.prototype.hasOwnProperty.call(selectedMap, groupIndex)) {
+            continue;
+        }
+        if (parseInt(groupIndex, 10) === ignoreGroupIndex) {
+            continue;
+        }
+        if (String(skuSpecIds[groupIndex]) !== String(selectedMap[groupIndex])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function applySkuAvailability(data) {
+    var optionValueMap = data && data.skus && data.skus.option_value ? data.skus.option_value : null;
+    var $groups = $('.spec-group');
+    var selectedMap;
+
+    if (!optionValueMap || !$groups.length) {
+        return;
+    }
+
+    selectedMap = getSelectedSpecMap($groups);
+
+    $groups.each(function(groupIndex) {
+        $(this).find('.spec-option').each(function() {
+            var $option = $(this);
+            var optionId = String($option.data('id'));
+            var hasValidCombination = false;
+
+            if ($option.hasClass('active')) {
+                $option.removeClass('disabled').addClass('available');
+                return;
+            }
+
+            $.each(optionValueMap, function(key, val) {
+                var skuSpecIds;
+                if (!val || parseInt(val.stock, 10) <= 0) {
+                    return true;
+                }
+
+                skuSpecIds = String(key).split('-');
+                if (String(skuSpecIds[groupIndex]) !== optionId) {
+                    return true;
+                }
+
+                if (isSkuCompatible(skuSpecIds, selectedMap, groupIndex)) {
+                    hasValidCombination = true;
+                    return false;
+                }
+
+                return true;
+            });
+
+            $option.toggleClass('disabled', !hasValidCombination);
+            $option.toggleClass('available', hasValidCombination);
+        });
+    });
+}
+
+/**
+ * 禁用无库存的规格
+ */
+function initSku(data){
+    syncOrderStateFromDom();
+    applySkuAvailability(data);
+}
 
 function getCouponCode() {
     var $input = $('#coupon_code');
@@ -266,6 +270,7 @@ function updateCouponUI() {
             $tip.hide();
         }
     }
+    syncOrderStateFromDom();
 }
 
 function resetCouponState() {
@@ -275,9 +280,184 @@ function resetCouponState() {
     updateCouponUI();
 }
 
+function getQuantityValue() {
+    var input = document.getElementById('quantity');
+    var quantity = input ? parseInt(input.value, 10) : 1;
+
+    if (isNaN(quantity) || quantity < 1) {
+        return 1;
+    }
+
+    return quantity;
+}
+
+function getSelectedPayment() {
+    var $activePayment = $('.payment-item.active').first();
+
+    if (!$activePayment.length) {
+        return {
+            plugin: '',
+            name: '',
+            title: ''
+        };
+    }
+
+    return {
+        plugin: String($activePayment.data('method') || ''),
+        name: String($activePayment.data('name') || ''),
+        title: $.trim(String($activePayment.find('.payment-name').text() || ''))
+    };
+}
+
+function syncOrderStateFromDom() {
+    var payment = getSelectedPayment();
+
+    orderState.goodsId = getGoodsId();
+    orderState.skuIds = getSelectedSkuIds();
+    orderState.quantity = getQuantityValue();
+    orderState.paymentPlugin = payment.plugin;
+    orderState.paymentName = payment.name;
+    orderState.paymentTitle = payment.title;
+    orderState.couponCode = couponState.applied ? (couponState.code || getCouponCode()) : '';
+
+    return {
+        goodsId: orderState.goodsId,
+        skuIds: orderState.skuIds.slice(),
+        quantity: orderState.quantity,
+        paymentPlugin: orderState.paymentPlugin,
+        paymentName: orderState.paymentName,
+        paymentTitle: orderState.paymentTitle,
+        couponCode: orderState.couponCode,
+        isSubmitting: orderState.isSubmitting
+    };
+}
+
+function serializeFormToObject($form) {
+    var formData = {};
+
+    $form.serializeArray().forEach(function(item) {
+        if (Object.prototype.hasOwnProperty.call(formData, item.name)) {
+            if (!Array.isArray(formData[item.name])) {
+                formData[item.name] = [formData[item.name]];
+            }
+            formData[item.name].push(item.value);
+        } else {
+            formData[item.name] = item.value;
+        }
+    });
+
+    return formData;
+}
+
+function collectOrderPayload() {
+    var state = syncOrderStateFromDom();
+    var formData = serializeFormToObject($('#buyForm'));
+
+    formData.goods_id = state.goodsId;
+    formData.quantity = state.quantity;
+    formData.payment_plugin = state.paymentPlugin;
+    formData.payment_name = state.paymentName;
+    formData.payment_title = state.paymentTitle;
+    formData.sku_ids = state.skuIds.slice();
+
+    if (state.couponCode) {
+        formData.coupon_code = state.couponCode;
+    } else if (Object.prototype.hasOwnProperty.call(formData, 'coupon_code')) {
+        delete formData.coupon_code;
+    }
+
+    return {
+        state: state,
+        payload: formData
+    };
+}
+
+function setSubmittingState(isSubmitting) {
+    var $buyBtn = $('.buy-btn-g');
+    var shouldDisable = false;
+
+    orderState.isSubmitting = !!isSubmitting;
+
+    if (!$buyBtn.length) {
+        return;
+    }
+
+    shouldDisable = orderState.isSubmitting || $buyBtn.hasClass('is-disabled');
+    $buyBtn.toggleClass('is-loading', orderState.isSubmitting);
+    $buyBtn.prop('disabled', shouldDisable);
+    $buyBtn.attr('aria-busy', orderState.isSubmitting ? 'true' : 'false');
+}
+
+function animateDynamicValue(selector, value) {
+    $(selector).each(function() {
+        var $element = $(this);
+        var nextValue = String(value == null ? '' : value);
+
+        if ($.trim($element.text()) === nextValue) {
+            return;
+        }
+
+        $element.addClass('is-refreshing');
+        $element.text(nextValue);
+
+        window.setTimeout(function() {
+            $element.removeClass('is-refreshing');
+        }, 260);
+    });
+}
+
+function submitOrder(payload) {
+    var loadIndex;
+
+    if (orderState.isSubmitting) {
+        return;
+    }
+
+    setSubmittingState(true);
+    loadIndex = layer.load(2);
+
+    $.ajax({
+        url: '/user/shop.php?action=xiadan',
+        type: 'POST',
+        data: payload,
+        dataType: 'json',
+        timeout: 20000,
+        success: function(response) {
+            if (response.code == 400) {
+                layer.msg(response.msg);
+                return;
+            }
+            if (response.code == 200) {
+                layer.msg('正在跳转支付页面');
+                location.href = '/?action=pay&out_trade_no=' + response.data.out_trade_no;
+                return;
+            }
+            if (response.code == 302) {
+                layer.msg(response.msg);
+                location.href = response.url;
+                return;
+            }
+            if (response.msg) {
+                layer.msg(response.msg);
+            }
+        },
+        error: function(xhr, status, error) {
+            if (status == 'timeout') {
+                layer.msg('请求超时，请重试');
+            } else {
+                layer.msg('请求失败：' + error);
+            }
+        },
+        complete: function() {
+            layer.close(loadIndex);
+            setSubmittingState(false);
+        }
+    });
+}
+
 function refreshGoodsInfo(options){
     options = options || {};
-    var quantity = $('#quantity').val();
+    var state = syncOrderStateFromDom();
     var couponCode = '';
     var includeCoupon = false;
     if (options.forceCoupon) {
@@ -287,21 +467,18 @@ function refreshGoodsInfo(options){
         couponCode = couponState.code || getCouponCode();
         includeCoupon = couponCode !== '';
     }
-    // 获取所有类同时包含 spec-option 和 active 的元素
-    var $activeOptions = $('.spec-option.active');
-    var activeDataIds = [];
-    $activeOptions.each(function() {
-        activeDataIds.push($(this).data('id'));
-    });
+    if (!state.goodsId) {
+        return;
+    }
     var loadIndex = layer.load(2);
     $.ajax({
         url: '/user/shop.php?action=getGoodsInfo',
         type: 'POST',
         data: (function(){
             var payload = {
-                goods_id: $('#goods_id').val(),
-                quantity: quantity,
-                sku_ids: activeDataIds
+                goods_id: state.goodsId,
+                quantity: state.quantity,
+                sku_ids: state.skuIds.slice()
             };
             if (includeCoupon && couponCode) {
                 payload.coupon_code = couponCode;
@@ -310,17 +487,14 @@ function refreshGoodsInfo(options){
         })(),
         dataType: 'json',
         timeout: 15000, // 超时时间（毫秒）
-        beforeSend: function(xhr) {
-            // 请求发送前的处理（如设置请求头）
-        },
         success: function(e) {
             if(e.code == 400){
                 layer.msg(e.msg)
                 return;
             }
-            $('.dynamic-price').html(e.data.price);
-            $('.dynamic-stock').html(e.data.stock);
-            $('.dynamic-sales').html(e.data.sales);
+            animateDynamicValue('.dynamic-price', e.data.price);
+            animateDynamicValue('.dynamic-stock', e.data.stock);
+            animateDynamicValue('.dynamic-sales', e.data.sales);
 
             // 假设返回的数据存储在response变量中
             var data = e.data;
@@ -353,105 +527,12 @@ function refreshGoodsInfo(options){
                     }
                 }
             }
-            // 1. 收集所有规格选项
-            var specOptions = {};
-            $('.spec-option').each(function() {
-                var $this = $(this);
-                var id = $this.data('id').toString();
-                specOptions[id] = {
-                    element: $this,
-                    hasStock: true // 默认有货
-                };
-            });
-
-            // 2. 获取当前选中的规格
-            var currentSelectedSpecs = [];
-            $('.spec-option.active').each(function() {
-                currentSelectedSpecs.push($(this).data('id').toString());
-            });
-            
-
-            // 遍历每个规格组
-            $('.spec-group').each(function() {
-                var $group = $(this);
-                var groupIndex = $('.spec-group').index($group); // 获取当前组的索引（0=类型组，1=时长组）
-                
-                // 遍历当前组的每个规格选项
-                $group.find('.spec-option').each(function() {
-                    var $this = $(this);
-                    var thisSpecId = $this.data('id').toString();
-                    
-                    // 如果这个规格已经被选中，则保持可用状态
-                    if ($this.hasClass('active')) {
-                        $this.removeClass('disabled').addClass('available');
-                        return;
-                    }
-                    
-                    // 优先级1：如果已选中其他规格，检查是否可以与已选中规格组合成有库存的SKU
-                    var hasValidCombination = false;
-                    
-                    if (currentSelectedSpecs.length > 0) {
-                        // 检查该规格选项是否可以与已选中的规格组合成有库存的SKU
-                        $.each(data.skus.option_value, function(key, val) {
-                            if (val.stock > 0) {
-                                var skuSpecIds = key.split('-');
-                                
-                                // 检查当前SKU是否包含这个规格ID
-                                if (skuSpecIds[groupIndex] === thisSpecId) {
-                                    // 检查当前SKU是否与已选中的其他规格兼容
-                                    var isCompatible = true;
-                                    
-                                    // 直接遍历已选中的DOM元素，避免data-id冲突
-                                    $('.spec-option.active').each(function() {
-                                        var $selectedOption = $(this);
-                                        var selectedSpecId = $selectedOption.data('id').toString();
-                                        var selectedGroupIndex = $('.spec-group').index($selectedOption.closest('.spec-group'));
-                                        
-                                        // 跳过当前正在检查的规格组
-                                        if (selectedGroupIndex === groupIndex) {
-                                            return true; // continue
-                                        }
-                                        
-                                        // 检查已选中规格是否在当前SKU中
-                                        if (skuSpecIds[selectedGroupIndex] !== selectedSpecId) {
-                                            isCompatible = false;
-                                            return false; // break
-                                        }
-                                    });
-                                    
-                                    if (isCompatible) {
-                                        hasValidCombination = true;
-                                        return false; // 找到一个有效组合即可
-                                    }
-                                }
-                            }
-                        });
-                    } else {
-                        // 优先级2：如果未选中任何规格，检查该规格选项是否参与任意一个有库存的SKU组合
-                        $.each(data.skus.option_value, function(key, val) {
-                            if (val.stock > 0) {
-                                var skuSpecIds = key.split('-');
-                                
-                                if (skuSpecIds[groupIndex] === thisSpecId) {
-                                    hasValidCombination = true;
-                                    return false; // 找到一个有效组合即可
-                                }
-                            }
-                        });
-                    }
-                    
-                    // 根据检查结果启用或禁用
-                    if (hasValidCombination) {
-                        $this.removeClass('disabled').addClass('available');
-                    } else {
-                        $this.addClass('disabled').removeClass('available');
-                    }
-                });
-            });
+            applySkuAvailability(data);
+            syncOrderStateFromDom();
         },
         error: function(xhr, status, error) {
             // 请求失败的回调（超时、网络错误、服务器错误等）
-            if(error == 'timeout'){
+            if(status == 'timeout'){
                 layer.msg('请求超时，请重试');
             }else{
                 layer.msg('请求失败：' + error);
@@ -543,8 +624,6 @@ $(function(){
     });
 
     // 抽屉内数量选择
-    var minusBtn = document.getElementById('drawerMinusBtn');
-    var plusBtn = document.getElementById('drawerPlusBtn');
     var quantityInput = document.getElementById('quantity');
 
     $('#drawerMinusBtn').on('click', function() {
@@ -576,7 +655,7 @@ $(function(){
     $('#buyForm #quantity').on('change', function(){
         validateQuantity(true);
         refreshGoodsInfo();
-    })
+    });
 
     var couponBtn = $('#coupon_apply_btn');
     if (couponBtn.length) {
@@ -586,6 +665,7 @@ $(function(){
                 layer.msg('请输入优惠券码');
                 return;
             }
+            syncOrderStateFromDom();
             refreshGoodsInfo({ forceCoupon: true, couponCode: code });
         });
     }
@@ -624,6 +704,7 @@ $(function(){
                 this.classList.add('active');
             }
             // 无论选中还是取消，都重新计算价格库存
+            syncOrderStateFromDom();
             refreshGoodsInfo();
         });
     });
@@ -635,12 +716,14 @@ $(function(){
         $paymentItems.removeClass('active');
         // 添加当前选中状态
         $(this).addClass('active');
+        syncOrderStateFromDom();
     });
 
     // 默认选中第一个
     $paymentItems.eq(0).addClass('active');
-    
-})
+    syncOrderStateFromDom();
+
+});
 
 
     
@@ -651,192 +734,17 @@ function hideEmModal(modal){
 
 // v2 提交订单
 function toBuy(){
+    var orderPayload;
     var qtyCheck = validateQuantity(true);
     if (!qtyCheck.valid) {
         return;
     }
-    // 使用jQuery的serializeArray()获取表单数据，然后转换为对象
-    const formDataArray = $('#buyForm').serializeArray();
-    const formData = {};
-    
-    // 处理表单数据，包括多选的情况
-    formDataArray.forEach(function(item) {
-        if (formData[item.name]) {
-            // 如果字段已存在，转换为数组
-            if (!Array.isArray(formData[item.name])) {
-                formData[item.name] = [formData[item.name]];
-            }
-            formData[item.name].push(item.value);
-        } else {
-            formData[item.name] = item.value;
-        }
-    });
-    
-    // 获取支付方式
-    var payment_plugin = $('.payment-item.active').data('method');
-    var payment_name = $('.payment-item.active').data('name');
-    var payment_title = $('.payment-item.active .payment-name').text();
-    if (!payment_plugin) {
+
+    orderPayload = collectOrderPayload();
+    if (!orderPayload.state.paymentPlugin) {
         layer.msg('当前商品暂未配置可用支付方式');
         return;
     }
 
-    // 获取所有选中的规格 和 active 的元素
-    var $activeOptions = $('.spec-option.active');
-    var activeDataIds = [];
-    $activeOptions.each(function() {
-        activeDataIds.push($(this).data('id'));
-    });
-    
-    // 添加到表单数据中
-    formData.payment_plugin = payment_plugin;
-    formData.payment_title = payment_title;
-    formData.payment_name = payment_name;
-    formData.sku_ids = activeDataIds;
-    if (couponState.applied) {
-        formData.coupon_code = couponState.code || getCouponCode();
-    } else if (formData.coupon_code) {
-        delete formData.coupon_code;
-    }
-    
-    console.log('表单数据：', formData);
-    // 显示加载层
-    let loadIndex = layer.load(2);
-    
-    // 发送AJAX请求
-    $.ajax({
-        url: '/user/shop.php?action=xiadan',
-        type: 'POST',
-        data: formData,
-        dataType: 'json',
-        timeout: 20000, // 超时时间（毫秒）
-        success: function(response) {
-            if(response.code == 400){
-                layer.msg(response.msg);
-            }
-            if(response.code == 200){
-                layer.msg('正在跳转支付页面');
-                location.href="/?action=pay&out_trade_no=" + response.data.out_trade_no;
-            }
-            if(response.code == 302){
-                layer.msg(response.msg);
-                location.href=response.url;
-            }
-        },
-        error: function(xhr, status, error) {
-            // 请求失败的回调
-            if(status == 'timeout'){
-                layer.msg('请求超时，请重试');
-            }else{
-                layer.msg('请求失败：' + error);
-            }
-        },
-        complete: function(xhr, status) {
-            // 请求完成的回调（无论成功/失败都会执行）
-            layer.close(loadIndex);
-        }
-    });
-}
-
-// v1 提交订单
-function toBuyNow(goods_id){
-    var quantity = $('#goods-quantity').val();
-    var couponCode = couponState.applied ? (couponState.code || getCouponCode()) : '';
-    // closeDrawerFunc();
-    // 获取所有类同时包含 spec-option 和 active 的元素
-    var $activeOptions = $('.spec-option.active');
-    var activeDataIds = [];
-    $activeOptions.each(function() {
-        activeDataIds.push($(this).data('id'));
-    });
-    var payment_plugin = $('.payment-item.active').data('method');
-    var payment_title = $('.payment-item.active .payment-name').text();
-    if (!payment_plugin) {
-        layer.msg('当前商品暂未配置可用支付方式');
-        return;
-    }
-
-    const attach = {};
-    $('.attach-input').each(function() {
-        const $input = $(this);
-        const value = $input.val().trim(); // 获取当前输入框的值
-        const name = $input.attr('name'); // 获取 name 属性，如 "attach[手机号]"
-
-        // 3. 解析 name 中的 key（如从 "attach[手机号]" 中提取 "手机号"）
-        const key = name.match(/attach\[(.+?)\]/)[1];
-
-        // 4. 存入对象（键为解析出的 key，值为输入框的值）
-        attach[key] = value;
-    });
-
-    const required = {};
-    $('.required-input').each(function() {
-        const $input = $(this);
-        const value = $input.val().trim(); // 获取当前输入框的值
-        const name = $input.attr('name'); // 获取 name 属性，如 "required[手机号]"
-
-        // 3. 解析 name 中的 key（如从 "attach[手机号]" 中提取 "手机号"）
-        const key = name.match(/required\[(.+?)\]/)[1];
-
-        // 4. 存入对象（键为解析出的 key，值为输入框的值）
-        required[key] = value;
-    });
-
-
-
-    console.log('商品规格：' + activeDataIds);
-    console.log('购买数量：' + quantity);
-    console.log('支付插件：' + payment_plugin);
-    console.log('支付名称：' + payment_title);
-    console.log('附件内容：' + attach);
-    console.log('必填项：' + required);
-
-
-    // 开始下单
-    let loadIndex = layer.load(2);
-    var submitData = {
-        goods_id: goods_id,
-        quantity: quantity,
-        sku_ids: activeDataIds,
-        payment_plugin: payment_plugin,
-        payment_title: payment_title,
-        attach: attach,
-        required: required
-    };
-    if (couponState.applied && couponCode) {
-        submitData.coupon_code = couponCode;
-    }
-
-    $.ajax({
-        url: '/user/shop.php?action=xiadan',
-        type: 'POST',
-        data: submitData,
-        dataType: 'json',
-        timeout: 20000, // 超时时间（毫秒）
-        beforeSend: function(xhr) {
-            // 请求发送前的处理（如设置请求头）
-        },
-        success: function(e) {
-            if(e.code == 400){
-                layer.msg(e.msg);
-            }
-            if(e.code == 200){
-                layer.msg('正在跳转支付页面');
-                location.href="/?action=pay&out_trade_no=" + e.data.out_trade_no;
-            }
-        },
-        error: function(xhr, status, error) {
-            // 请求失败的回调（超时、网络错误、服务器错误等）
-            if(error == 'timeout'){
-                layer.msg('请求超时，请重试');
-            }else{
-                layer.msg('请求失败：' + error);
-            }
-
-        },
-        complete: function(xhr, status) {
-            // 请求完成的回调（无论成功/失败都会执行）
-            layer.close(loadIndex);
-        }
-    });
+    submitOrder(orderPayload.payload);
 }
