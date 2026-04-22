@@ -1,6 +1,6 @@
 # Eshop 前端整治备忘
 
-记录当前 `eshop` 前台已经落地的改造，以及仍未收口的工作。原始评估稿里的“四阶段排期”绝大多数已经完成，这份文档不再展开评估，只保留事实和待办。
+记录当前 `eshop` 前台已落地的改造，以及仍未收口的工作。原始评估稿里的"四阶段排期"已全部收尾，这份文档只保留事实和待办。
 
 ## 已落地的改造
 
@@ -30,30 +30,37 @@
 - `content/common/header.php`、`content/blog/default/header.php`、`user/views/*` 等入口都已切到新路径，前后台资源升级互不影响。
 - 默认封面占位图也搬到了 `content/static/images/cover.svg`。`goods.php`、`goods_list.php` 中所有 `<img onerror>` 兜底全部改用新路径，前台模板不再引用任何 `admin/views/...` 资源。
 
-## 仍未收口的剩余项
+### 设计 token 与颜色变量化
 
-### 1. 设计 token 仍重复定义
+- `content/common/common.css :root` 已是全站唯一的权威 token 源，统一维护品牌主色 / 次品牌色 / 文本层级 / 表面 / 阴影 / 圆角档位；`--muted` 保留全局既有值，列表页浅灰升为 `--muted-soft`，避免牵动其它页面的文字层级。
+- `content/templates/default/css/style.css` 的 `.df-list-page.blog-container` 作用域只剩列表页徽标专用的 `--df-gold / --df-gold-soft`，其余 `--df-*` 已直接对齐全局 token。
+- 高频硬编码色值（`rgba(95,132,255,…)` / `rgba(109,158,234,…)` / `rgba(131,177,246,…)` / `rgba(15,23,42,…)` 及对应 hex）在 `style.css` 中已全部切到 `--brand-* / --brand-alt-* / --shadow-ink-*` 变量，渐变里的特殊 alpha 用 `rgba(var(--*-rgb), x)` 写法表达。
 
-`content/common/common.css` 与 `content/templates/default/css/style.css` 仍各自维护一套色板、阴影、圆角变量。
-建议：保留一份权威定义（推荐放在 `common.css` 的 `:root`），另一份只覆盖差异化变量，避免后续视觉漂移。
+## 剩余项
 
-### 2. 详情页 CSS 仍大量硬编码色值
+1. **低频一次性色值**：`style.css` 的高频品牌色、阴影色、常用浅表面和输入框边框已变量化；纯 `#fff`、少量灰阶和一次性渐变端点继续保留，避免为了归零制造过多 token。
+2. **交互体验打磨**：`refreshGoodsInfo()` 更新价格、库存、销量时已有淡入过渡；`.spec-option.disabled` 补了禁用态过渡；下单按钮在 `aria-busy="true"` 时显示 CSS spinner。后续只在真实投诉或新交互出现时继续微调。
+3. **框架级接管暂不立项**：只有当详情页继续大改时才需要重新评估是否引入 Alpine.js 之类的轻量方案。
 
-`style.css` 里仍有约 200 处 `rgba(...)` / `#xxxxxx` 直接写死，特别是 `rgba(95, 132, 255, 0.xx)` 这类品牌色衍生值。
-建议：在 token 去重时一并把这些魔法值替换为 `var(--brand)` / `var(--brand-soft)` / `var(--shadow-*)` 等变量。
+## 组件命名盘点（先不重构）
 
-### 3. 价格切换与缺货态体验打磨（低优先级）
+按钮类：
 
-`refreshGoodsInfo()` 仍是硬切换价格，`.spec-option.disabled` 已经有透明度 + 删除线，但没有过渡。属于体验打磨项，可在后续版本酌情处理。
+- `.header-auth-btn`（`is-ghost` / `is-solid` 两种变体）、`.spec-option`（规格 chip，行为强依赖 JS 状态）、`.df-subtab-chip`（列表页 chip action）是未来 `.u-btn` / `.u-chip` 基类的主要候选来源。
+- 历史名 `.btn-submit` / `.goods-action-btn` / `.df-chip-button` / `.df-tag` / `.blog-card` 在当前默认模板里均无使用点，后续重新引入时直接对齐新基类即可，不必反向抽离。
 
-### 4. 框架级接管暂不立项
+卡片类：
 
-只有当详情页继续大改时才需要重新评估是否引入 Alpine.js 之类的轻量方案。当前仓库没有这种需求，保持现状。
+- `.goods-detail-card` / `.goods-content-card` / `.df-site-notice` 共享白底 + 边框 + 圆角 + 阴影，是 `.u-card` 的主要抽取来源；保留各自的 padding 与头部区域差异。
+
+徽标与 Chip：
+
+- `.goods-stat-item` 更接近小卡片，`.df-pill` 是纯状态徽标，`.df-subtab-chip` 是筛选 chip，未来 `.u-chip` 主要以 `.df-pill` 的样式收敛。
 
 ## 下一步建议
 
 如果接下来还要继续整治前端，按以下顺序最稳：
 
-1. 设计 token 去重，合并到一份权威配置。
-2. 把详情页 CSS 中剩余的硬编码色值替换为变量。
-3. 评估列表页与详情页是否需要再做一次组件命名上的统一。
+1. 在新增页面或下次详情页改动时试点 `.u-btn` / `.u-card` / `.u-chip` 基类，不回头批量改旧类名。
+2. 当详情页结构继续大改时，再评估是否引入 Alpine.js 等轻量状态层；当前保持不立项。
+3. 继续按重复度收口低频硬编码色值，避免为了纯粹归零引入过多一次性 token。
