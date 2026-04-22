@@ -392,17 +392,23 @@ function animateDynamicValue(selector, value) {
     $(selector).each(function() {
         var $element = $(this);
         var nextValue = String(value == null ? '' : value);
+        var finishRefresh = function() {
+            $element.removeClass('is-refreshing');
+        };
 
         if ($.trim($element.text()) === nextValue) {
             return;
         }
 
         $element.addClass('is-refreshing');
-        $element.text(nextValue);
-
         window.setTimeout(function() {
-            $element.removeClass('is-refreshing');
-        }, 260);
+            $element.text(nextValue);
+            if (window.requestAnimationFrame) {
+                window.requestAnimationFrame(finishRefresh);
+            } else {
+                finishRefresh();
+            }
+        }, 120);
     });
 }
 
