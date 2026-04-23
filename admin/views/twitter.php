@@ -102,7 +102,7 @@
             sequenceDiagram: false,
             imageUpload: true,
             imageFormats: ["jpg", "jpeg", "gif", "png"],
-            imageUploadURL: "media.php?action=upload&editor=1",
+            imageUploadURL: "media.php?action=upload&editor=1&token=<?= LoginAuth::genToken() ?>",
             syncScrolling: "single",
         });
         Editor.setToolbarAutoFixed(false);

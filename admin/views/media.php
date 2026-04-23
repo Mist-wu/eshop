@@ -74,6 +74,7 @@
         var form = layui.form;
         var upload = layui.upload;
         var layer = layui.layer;
+        var mediaToken = '<?= LoginAuth::genToken() ?>';
         function initUpload() {
             var $btn = $('#toolbar-upload');
             if (!$btn.length || $btn.data('uploadInited')) {
@@ -86,6 +87,7 @@
                 field: 'editormd-image-file',
                 accept: 'file',
                 multiple: true,
+                data: { token: mediaToken },
                 done: function(res){
                     if (!res || res.success !== 1) {
                         var msg = (res && res.message) ? res.message : '上传失败';
@@ -179,7 +181,7 @@
                             url: '?action=operate_media',
                             type: 'POST',
                             dataType: 'json',
-                            data: { aids: ids, operate: 'del', token: '<?= LoginAuth::genToken() ?>' },
+                            data: { aids: ids, operate: 'del', token: mediaToken },
                             success: function(e) {
                                 if(e.code == 400){
                                     return layer.msg(e.msg)
@@ -211,7 +213,7 @@
                         url: '?action=operate_media',
                         type: 'POST',
                         dataType: 'json',
-                        data: { aids: data.aid, operate: 'del', token: '<?= LoginAuth::genToken() ?>' },
+                        data: { aids: data.aid, operate: 'del', token: mediaToken },
                         success: function(e) {
                             if(e.code == 400){
                                 return layer.msg(e.msg)

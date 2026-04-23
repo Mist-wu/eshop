@@ -138,6 +138,7 @@ if ($action === 'lib') {
 }
 
 if ($action === 'upload') {
+    LoginAuth::checkToken();
     $sid = Input::getIntVar('sid');
     $editor = isset($_GET['editor']) ? 1 : 0; // 是否来自Markdown编辑器的上传
     $attach = isset($_FILES['file']) ? $_FILES['file'] : '';
@@ -175,6 +176,7 @@ if ($action === 'delete') {
 }
 
 if ($action === 'delete_async') {
+    LoginAuth::checkToken();
     $aid = Input::postIntVar('aid');
     $Media_Model->deleteMedia($aid);
     output::ok();
@@ -203,6 +205,7 @@ if ($action === 'operate_media') {
 }
 
 if ($action === 'update_media') {
+    LoginAuth::checkToken();
     $filename = Input::postStrVar('filename');
     $id = Input::postIntVar('id');
 
@@ -218,6 +221,7 @@ if ($action === 'add_media_sort') {
     if (!User::isAdmin()) {
         emMsg('权限不足！', './');
     }
+    LoginAuth::checkToken();
     $sortname = Input::postStrVar('sortname');
     if (empty($sortname)) {
         emDirect("./media.php?error_a=1");
@@ -231,6 +235,7 @@ if ($action === 'update_media_sort') {
     if (!User::isAdmin()) {
         emMsg('权限不足！', './');
     }
+    LoginAuth::checkToken();
     $sortname = Input::postStrVar('sortname');
     $id = isset($_POST['id']) ? (int)$_POST['id'] : '';
 
