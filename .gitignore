@@ -30,6 +30,8 @@ __MACOSX/
 !.env.example
 AGENTS.md
 AGENTS.local.md
+admin-improvements.md
+frontend-improvements.md
 
 # docker
 db_data/*
