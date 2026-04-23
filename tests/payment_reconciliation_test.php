@@ -597,6 +597,49 @@ $testsRun = testCase('callback verification accepts signed late payment payloads
     testAssertSame(false, $snapshot['order_missing'], 'Existing local order should not be marked missing');
 });
 
+$testsRun = testCase('callback verification rejects abnormal status type and amount mismatch', function () {
+    $GLOBALS['test_db_orders'] = [
+        'LOCAL-3A' => [
+            'id' => 31,
+            'out_trade_no' => 'LOCAL-3A',
+            'amount' => 2000,
+            'payment' => '支付宝',
+        ],
+    ];
+
+    $base = [
+        'pid' => '10001',
+        'out_trade_no' => 'LOCAL-3A',
+        'trade_no' => 'YFT-3A',
+        'api_trade_no' => 'ALI-3A',
+        'type' => 'alipay',
+        'money' => '20.00',
+        'trade_status' => 'TRADE_SUCCESS',
+        'timestamp' => '2026-04-15 09:23:19',
+    ];
+
+    $mismatchedAmount = $base;
+    $mismatchedAmount['money'] = '19.99';
+    $mismatchedAmount['sign'] = testSignPayloadWithKey($mismatchedAmount, $GLOBALS['test_platform_private_key']);
+    $mismatchedAmount['sign_type'] = 'RSA';
+    $_POST = $mismatchedAmount;
+    testAssertSame(false, yifutCheckSign('notify', 'alipay'), 'Callback with mismatched amount must be rejected');
+
+    $closedTrade = $base;
+    $closedTrade['trade_status'] = 'TRADE_CLOSED';
+    $closedTrade['sign'] = testSignPayloadWithKey($closedTrade, $GLOBALS['test_platform_private_key']);
+    $closedTrade['sign_type'] = 'RSA';
+    $_POST = $closedTrade;
+    testAssertSame(false, yifutCheckSign('notify', 'alipay'), 'Callback with non-success trade status must be rejected');
+
+    $wrongType = $base;
+    $wrongType['type'] = 'wxpay';
+    $wrongType['sign'] = testSignPayloadWithKey($wrongType, $GLOBALS['test_platform_private_key']);
+    $wrongType['sign_type'] = 'RSA';
+    $_POST = $wrongType;
+    testAssertSame(false, yifutCheckSign('notify', 'alipay'), 'Callback for a different payment type must be rejected');
+});
+
 $testsRun = testCase('process confirmed payment recovers expired unpaid orders and avoids duplicate delivery', function () {
     $model = new TestableOrderModel();
     $model->orders['LOCAL-4'] = [
@@ -684,6 +727,44 @@ $testsRun = testCase('payment callback failure no longer retries active reconcil
 
     testAssertSame(false, $result['ok'], 'Callback failure should be returned to the caller');
     testAssertCount(0, $model->reconcileCalls, 'Callback failure should not immediately trigger a second reconcile request');
+});
+
+$testsRun = testCase('pay controller callback path is idempotent for duplicate success notifications', function () {
+    $model = new TestableOrderModel();
+    $model->orders['LOCAL-CB-2'] = [
+        'id' => 92,
+        'out_trade_no' => 'LOCAL-CB-2',
+        'status' => 0,
+        'pay_status' => 0,
+        'delete_time' => null,
+        'payment' => '支付宝',
+        'trade_no' => '',
+        'api_trade_no' => '',
+        'up_no' => '',
+    ];
+    $controller = new TestablePayController($model);
+    $payload = [
+        'out_trade_no' => 'LOCAL-CB-2',
+        'trade_no' => 'YFT-CB-2',
+        'api_trade_no' => 'ALI-CB-2',
+        'up_no' => 'ALI-CB-2',
+        'payment' => '支付宝',
+        'pay_time' => 1710000400,
+    ];
+
+    $first = $controller->processPaymentCallbackPublic($payload, 'notify');
+    testAssert(!empty($first['ok']), 'First callback should mark the order paid');
+    testAssertSame(1, $model->orders['LOCAL-CB-2']['pay_status'], 'First callback should persist paid status');
+    testAssertSame([92], $model->couponConfirmed, 'First callback should confirm coupon usage once');
+    testAssertSame([92], $model->deliverCalls, 'First callback should trigger delivery once');
+
+    $model->couponConfirmed = [];
+    $model->deliverCalls = [];
+    $second = $controller->processPaymentCallbackPublic($payload, 'notify');
+    testAssert(!empty($second['ok']), 'Duplicate callback should still return ok');
+    testAssertSame(false, $second['updated'], 'Duplicate callback should not mark the paid order again');
+    testAssertSame([], $model->couponConfirmed, 'Duplicate callback should not confirm coupon usage again');
+    testAssertSame([], $model->deliverCalls, 'Duplicate callback should not trigger delivery again');
 });
 
 $testsRun = testCase('manual reconcile and recent paid reconcile use yifut query interfaces to fix local state', function () {
