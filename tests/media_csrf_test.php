@@ -100,4 +100,20 @@ $testsRun = testCase('media write actions enforce csrf token', function () {
     }
 });
 
+$testsRun = testCase('media javascript write requests include csrf token', function () {
+    $mediaView = file_get_contents(EM_ROOT . '/admin/views/media.php');
+    $twitterView = file_get_contents(EM_ROOT . '/admin/views/twitter.php');
+    $headerView = file_get_contents(EM_ROOT . '/admin/views/header.php');
+    $commonJs = file_get_contents(EM_ROOT . '/admin/views/js/common.js');
+    $mediaLibJs = file_get_contents(EM_ROOT . '/admin/views/js/media-lib.js');
+
+    testAssertStringContains('window.EM_ADMIN_TOKEN', $headerView, 'admin header should expose csrf token to shared javascript');
+    testAssertStringContains('data: { token: mediaToken }', $mediaView, 'layui media upload should include token');
+    testAssertStringContains('token: mediaToken', $mediaView, 'layui media delete should include token');
+    testAssertStringContains('token=<?= LoginAuth::genToken() ?>', $twitterView, 'editor.md upload url should include token');
+    testAssertStringContains("formData.append('token', token)", $commonJs, 'pasted image upload should append token');
+    testAssertStringContains('token: getAdminCsrfToken()', $mediaLibJs, 'media library async delete should include token');
+    testAssertStringContains('formData.append("token", getAdminCsrfToken())', $mediaLibJs, 'dropzone media upload should append token');
+});
+
 echo 'Tests run: ' . $testsRun . PHP_EOL;
