@@ -47,7 +47,7 @@ function delete_media(id) {
         icon: 3,
         btn: ['删除', '取消']
     }, function (index) {
-        $.post('./media.php?action=delete_async', {aid: id}, function () {
+        $.post('./media.php?action=delete_async', {aid: id, token: getAdminCsrfToken()}, function () {
             $('#image-list').html('');
             page = 1;
             loadImages();
@@ -136,6 +136,7 @@ var myDropzone = new Dropzone("#mediaAdd", {
     previewsContainer: ".dropzone-previews",
     sending: function (file, xhr, formData) {
         formData.append("filesize", file.size);
+        formData.append("token", getAdminCsrfToken());
         $('#mediaAdd').html("上传中……");
     },
     init: function () {

@@ -32,6 +32,9 @@ $admin_brand_name = strcasecmp($blogname, 'eshop') === 0 ? strtoupper($blogname)
     <link rel="stylesheet" href="<?= EM_URL ?>admin/views/css/style.css?v=<?= time() ?>">
 
 
+    <script>
+        window.EM_ADMIN_TOKEN = <?= json_encode(LoginAuth::genToken()) ?>;
+    </script>
     <script src="<?= EM_URL ?>admin/views/js/common.js?t=<?= Option::EM_VERSION_TIMESTAMP ?>"></script>
 
     <script>

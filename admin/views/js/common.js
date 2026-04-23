@@ -1,3 +1,7 @@
+function getAdminCsrfToken() {
+    return window.EM_ADMIN_TOKEN || $('[name="token"]').first().val() || '';
+}
+
 function getChecked(node) {
     let re = false;
     $('input.' + node).each(function (i) {
@@ -445,8 +449,12 @@ function imgPasteExpand(thisEditor) {
     function uploadImg(img) {
         var formData = new FormData();
         var imgName = "粘贴上传" + new Date().getTime() + "." + img.name.split(".").pop();
+        var token = getAdminCsrfToken();
 
         formData.append('file', img, imgName);
+        if (token) {
+            formData.append('token', token);
+        }
         thisEditor.insertValue("上传中...");
         $.ajax({
             url: postUrl, type: 'post', data: formData, processData: false, contentType: false, xhr: function () {
