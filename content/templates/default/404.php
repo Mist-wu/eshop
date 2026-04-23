@@ -44,7 +44,5 @@ defined('EM_ROOT') || exit('access denied!');
     <p>404 Not Found ！</p>
     <p><a href="<?= EM_URL ?>">首页</a></p>
 </div>
-<script src="<?= TEMPLATE_URL ?>js/jquery.min.3.5.1.js?v=<?= Option::EM_VERSION_TIMESTAMP ?>"></script>
-<script src="<?= TEMPLATE_URL ?>js/common_tpl.js?t=<?= Option::EM_VERSION_TIMESTAMP ?>"></script>
 </body>
 </html>

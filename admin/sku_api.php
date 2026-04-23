@@ -147,6 +147,7 @@ switch ($action) {
      * 创建规格属性
      */
     case 'create_spec':
+        LoginAuth::checkToken();
         $title = Input::requestStrVar('title');
         $group_id = Input::getStrVar('goods_type_id');
 
@@ -176,6 +177,7 @@ switch ($action) {
      * 创建规格值
      */
     case 'create_value':
+        LoginAuth::checkToken();
         $name = Input::requestStrVar('title');
         $spec_id = Input::requestIntVar('spec_id');
 

@@ -164,6 +164,7 @@ if ($action == 'reconcile_recent_paid') {
 
 // 删除订单
 if ($action == 'del') {
+    LoginAuth::checkToken();
 
     $ids = Input::postStrVar('ids');
 
